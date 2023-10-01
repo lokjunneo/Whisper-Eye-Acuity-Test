@@ -3,4 +3,4 @@
 `pip install pyside6`
 `pip install numpy`
 
-Then run `test.py`
+Then run `app.py`
