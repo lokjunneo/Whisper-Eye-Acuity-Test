@@ -45,7 +45,9 @@ class VAD(object):
 
         self.lam = 0
 
-        self.wait = True
+        #self.wait = True
+        self.wait = False
+        self.state = 0
 
     def resetDelta(self):
         self.delta = 1.01
@@ -63,7 +65,7 @@ class VAD(object):
 
     def processFrame(self, frame_input):
         if (len(frame_input)<=0):
-            return
+            return self.state
         state = 0
 
         frame = np.array(frame_input).astype(np.float32)
@@ -95,7 +97,8 @@ class VAD(object):
         self.threshold = threshold
 
         if energy * 1.01 > threshold and lam > 0.35:
-            if self.activeFrameCount > 1:
+            #if self.activeFrameCount > :
+            if self.activeFrameCount > 3:
                 state = 1
                 self.inactiveFrameCount = 0
                 self.wait = False
@@ -105,7 +108,7 @@ class VAD(object):
             self.activeFrameCount += 1
         else:
             #if self.inactiveFrameCount > 8 * 1:
-            if self.inactiveFrameCount > 8 * 2:
+            if self.inactiveFrameCount > 8 * 3:
             #if self.inactiveFrameCount > 8 * 4:
                 state = 0
                 self.activeFrameCount = 0
@@ -126,4 +129,5 @@ class VAD(object):
         self.energyMIN = self.energyMIN * self.delta
         self.energyMAX = self.energyMAX * 0.999
 
+        self.state = state
         return state

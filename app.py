@@ -77,13 +77,17 @@ class MainWindow(QMainWindow):
         # Convert bytes to NumPy array
         numpy_array = np.frombuffer(data.data(), dtype=np.int16)
         
-        vad_state = self.VAD.processFrame(numpy_array.tolist())
-        #print(self.VAD.activeFrameCount)
-        if (vad_state):
-            self.label.setText("VAD: Speech detected")
+        if numpy_array.size == 0:
+            print("ZERO SIZE")
         else:
-            self.label.setText("VAD: No speech detected")
-            self.label.update()
+            vad_state = self.VAD.processFrame(numpy_array.tolist())
+            #print(self.VAD.activeFrameCount)
+            #if (self.VAD.activeFrameCount > 0):
+            if (vad_state):
+                #print(vad_state)
+                self.label.setText("VAD: Speech detected")
+            else:
+                self.label.setText("VAD: No speech detected")
 
         # Not done properly
         for i in range(0, numpy_array.size, 1):
