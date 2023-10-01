@@ -78,7 +78,7 @@ class MainWindow(QMainWindow):
         numpy_array = np.frombuffer(data.data(), dtype=np.int16)
         
         self.VAD.processFrame(numpy_array.tolist())
-        
+        print(self.VAD.activeFrameCount)
         if (self.VAD.activeFrameCount > 0):
             self.label.setText("VAD: Speech detected")
         else:

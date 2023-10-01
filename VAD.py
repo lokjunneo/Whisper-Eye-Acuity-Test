@@ -52,6 +52,9 @@ class VAD(object):
 
     def energy(self, frame):
         result = 0.0
+        
+        if (len(frame) <= 0):
+            return result
 
         for value in frame:
             result += value * value
@@ -59,6 +62,8 @@ class VAD(object):
         return math.sqrt(result / float(len(frame)))
 
     def processFrame(self, frame_input):
+        if (len(frame_input)<=0):
+            return
         state = 0
 
         frame = np.array(frame_input).astype(np.float32)
