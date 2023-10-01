@@ -104,7 +104,8 @@ class VAD(object):
 
             self.activeFrameCount += 1
         else:
-            if self.inactiveFrameCount > 8 * 3:
+            #if self.inactiveFrameCount > 8 * 1:
+            if self.inactiveFrameCount > 8 * 2:
             #if self.inactiveFrameCount > 8 * 4:
                 state = 0
                 self.activeFrameCount = 0
