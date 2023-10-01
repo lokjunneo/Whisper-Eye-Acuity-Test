@@ -97,8 +97,8 @@ class VAD(object):
         self.threshold = threshold
 
         if energy * 1.01 > threshold and lam > 0.35:
-            #if self.activeFrameCount > :
-            if self.activeFrameCount > 3:
+            if self.activeFrameCount > 1:
+            #if self.activeFrameCount > 3:
                 state = 1
                 self.inactiveFrameCount = 0
                 self.wait = False
