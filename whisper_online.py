@@ -107,7 +107,8 @@ class FasterWhisperASR(ASRBase):
 
         # this worked fast and reliably on NVIDIA L40
         #model = WhisperModel(model_size_or_path, device="cuda", compute_type="float16", download_root=cache_dir)
-        model = WhisperModel(model_size_or_path, device="auto", compute_type="default", download_root=cache_dir)
+        #model = WhisperModel(model_size_or_path, device="auto", compute_type="default", download_root=cache_dir)
+        model = WhisperModel(model_size_or_path, device="auto", compute_type="int8", download_root=cache_dir)
 
         # or run on GPU with INT8
         # tested: the transcripts were different, probably worse than with FP16, and it was slightly (appx 20%) slower
@@ -120,8 +121,19 @@ class FasterWhisperASR(ASRBase):
 
     def transcribe(self, audio, init_prompt=""):
         # tested: beam_size=5 is faster and better than 1 (on one 200 second document from En ESIC, min chunk 0.01)
+        print("*")
         segments, info = self.model.transcribe(audio, language=self.original_language, initial_prompt=init_prompt, beam_size=5, word_timestamps=True, condition_on_previous_text=True, **self.transcribe_kargs)
-        return list(segments)
+        # <!> Got a lot of stuff in here, you might find it useful
+        #print("Transcription info: ", info)
+        print(f"Audio duration is {info.duration} | Duration after VAD is {info.duration_after_vad} | Language is {info.language}")
+        seg_count = 1
+        for seg in segments:
+            print(f"<<< Segment {seg_count}: ") #, seg)
+            print("Transcribed text: ", seg.text)
+            for word in seg.words:
+                print(f"At {word.start:2.2f} to {word.end:2.2f}: {word.word}")
+            seg_count += 1
+        return (list(segments), info)
 
     def ts_words(self, segments):
         o = []
@@ -232,6 +244,10 @@ class OnlineASRProcessor:
         self.silence_iters = 0
 
     def insert_audio_chunk(self, audio):
+        # <!> Temporary measure
+        #       Note, should be in float
+        #if (len(self.audio_buffer) /self.SAMPLING_RATE > 3):
+        #    self.audio_buffer = np.array([],dtype=np.float32)
         self.audio_buffer = np.append(self.audio_buffer, audio)
 
     def prompt(self):
@@ -263,7 +279,9 @@ class OnlineASRProcessor:
         print("PROMPT:", prompt, file=sys.stderr)
         print("CONTEXT:", non_prompt, file=sys.stderr)
         print(f"transcribing {len(self.audio_buffer)/self.SAMPLING_RATE:2.2f} seconds from {self.buffer_time_offset:2.2f}",file=sys.stderr)
-        res = self.asr.transcribe(self.audio_buffer, init_prompt=prompt)
+        res_and_info = self.asr.transcribe(self.audio_buffer, init_prompt=prompt)
+        res = res_and_info[0]
+        info = res_and_info[1]
 
         # transform to [(beg,end,"word1"), ...]
         tsw = self.asr.ts_words(res)
@@ -272,7 +290,8 @@ class OnlineASRProcessor:
         o = self.transcript_buffer.flush()
         self.commited.extend(o)
         print(">>>>COMPLETE NOW:",self.to_flush(o),file=sys.stderr,flush=True)
-        print("INCOMPLETE:",self.to_flush(self.transcript_buffer.complete()),file=sys.stderr,flush=True)
+        incomplete_sentence = self.to_flush(self.transcript_buffer.complete())
+        print("INCOMPLETE:",incomplete_sentence,file=sys.stderr,flush=True)
 
         # there is a newly confirmed text
         if o:
@@ -318,7 +337,8 @@ class OnlineASRProcessor:
             #self.chunk_at(t)
 
         print(f"len of buffer now: {len(self.audio_buffer)/self.SAMPLING_RATE:2.2f}",file=sys.stderr)
-        return self.to_flush(o)
+        return incomplete_sentence
+        #return self.to_flush(o)
 
     def chunk_completed_sentence(self):
         if self.commited == []: return
@@ -519,7 +539,8 @@ if __name__ == "__main__":
 
     
     min_chunk = args.min_chunk_size
-    online = OnlineASRProcessor(asr,create_tokenizer(tgt_language))
+    #online = OnlineASRProcessor(asr,create_tokenizer(tgt_language))
+    online = OnlineASRProcessor(asr,"en")
 
 
     # load the audio into the LRU cache before we start the timer
