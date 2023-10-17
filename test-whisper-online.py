@@ -14,3 +14,14 @@ asr.use_vad()  # set using VAD
 
 online = OnlineASRProcessor(tgt_lan, asr)  # create processing object
 
+'''
+while audio_has_not_ended:   # processing loop:
+	a = # receive new audio chunk (and e.g. wait for min_chunk_size seconds first, ...)
+	online.insert_audio_chunk(a)
+	o = online.process_iter()
+	print(o) # do something with current partial output
+# at the end of this audio processing
+o = online.finish()
+print(o)  # do something with the last output
+'''
+

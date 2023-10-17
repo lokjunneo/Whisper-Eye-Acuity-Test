@@ -8,7 +8,7 @@ parser = argparse.ArgumentParser()
 
 # server options
 parser.add_argument("--host", type=str, default='localhost')
-parser.add_argument("--port", type=int, default=43008)
+parser.add_argument("--port", type=int, default=43007)
 
 
 # options from whisper_online

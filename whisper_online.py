@@ -4,7 +4,7 @@ import numpy as np
 import librosa  
 from functools import lru_cache
 import time
-
+from itertools import tee
 
 
 @lru_cache
@@ -119,20 +119,31 @@ class FasterWhisperASR(ASRBase):
 #        model = WhisperModel(modelsize, device="cpu", compute_type="int8") #, download_root="faster-disk-cache-dir/")
         return model
 
-    def transcribe(self, audio, init_prompt=""):
+    def transcribe(self, audio, init_prompt="C, D, E, F, L, O, P, T, Z, start, begin, end"):
         # tested: beam_size=5 is faster and better than 1 (on one 200 second document from En ESIC, min chunk 0.01)
         print("*")
-        segments, info = self.model.transcribe(audio, language=self.original_language, initial_prompt=init_prompt, beam_size=5, word_timestamps=True, condition_on_previous_text=True, **self.transcribe_kargs)
+        segments, info = self.model.transcribe(audio, language=self.original_language, initial_prompt=init_prompt, beam_size=5, word_timestamps=True, condition_on_previous_text=True, 
+                                               vad_parameters=dict(
+                                                   min_silence_duration_ms=500),
+                                                   ##min_speech_duration_ms=750),
+                                               **self.transcribe_kargs)
+        #print("List segments is: ", list(segments))
         # <!> Got a lot of stuff in here, you might find it useful
         #print("Transcription info: ", info)
         print(f"Audio duration is {info.duration} | Duration after VAD is {info.duration_after_vad} | Language is {info.language}")
         seg_count = 1
-        for seg in segments:
-            print(f"<<< Segment {seg_count}: ") #, seg)
+        # Seems like segments are "sentences", split only occurs after a full stop
+        segments, copy_segments = tee(segments)
+        for seg in copy_segments:
+            print(f"<<< Segment {seg_count}: ")#, seg)
+            
             print("Transcribed text: ", seg.text)
             for word in seg.words:
                 print(f"At {word.start:2.2f} to {word.end:2.2f}: {word.word}")
             seg_count += 1
+            
+        #print("List segments is: ", list(segments))
+        #print("Info is: ", info)
         return (list(segments), info)
 
     def ts_words(self, segments):
@@ -276,10 +287,13 @@ class OnlineASRProcessor:
         """
 
         prompt, non_prompt = self.prompt()
-        print("PROMPT:", prompt, file=sys.stderr)
-        print("CONTEXT:", non_prompt, file=sys.stderr)
+        #print("PROMPT:", prompt, file=sys.stderr)
+        #print("CONTEXT:", non_prompt, file=sys.stderr)
         print(f"transcribing {len(self.audio_buffer)/self.SAMPLING_RATE:2.2f} seconds from {self.buffer_time_offset:2.2f}",file=sys.stderr)
+        
+        # <?> They have a buffer_time_offset, but still pass in the entire audio_buffer?
         res_and_info = self.asr.transcribe(self.audio_buffer, init_prompt=prompt)
+        #print("Res and info is: ", res_and_info)
         res = res_and_info[0]
         info = res_and_info[1]
 
