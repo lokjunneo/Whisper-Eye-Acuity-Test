@@ -29,6 +29,7 @@ class MainWindow(QMainWindow):
         #socket
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.connect((SERVER_HOST, SERVER_PORT))
+        self.server_socket.setblocking(False)
         
         # Create chart
         self._series = QLineSeries()
@@ -85,8 +86,6 @@ class MainWindow(QMainWindow):
             self.server_socket.close()
         event.accept()
 
-    def valuechange(self):
-        print("change")
     @Slot()
     def _readyRead(self):
         data = self._io_device.readAll()
@@ -94,9 +93,22 @@ class MainWindow(QMainWindow):
         # Convert bytes to NumPy array
         numpy_array = np.frombuffer(data.data(), dtype=np.int16)
         
+        socket_recv_data = b'' #consider using bytearray() and .extend instead
         # Send audio data to the server
         try:
             self.server_socket.sendall(data.data())
+            while True:
+                try:
+                    recv_data = self.server_socket.recv(2048)
+                    # just in case of unreliable data
+                    if len(recv_data) < 1:
+                        break
+                    #print(recv_data.decode('utf-8'))
+                    socket_recv_data += recv_data
+                except:
+                    break
+            if len(socket_recv_data) >= 1:
+                print("I received: ", socket_recv_data.decode('utf-8'))
         except Exception as e:
             print(f"Error sending data: {e}")
         

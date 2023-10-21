@@ -125,6 +125,7 @@ class FasterWhisperASR(ASRBase):
         segments, info = self.model.transcribe(audio, language=self.original_language, initial_prompt=init_prompt, beam_size=5, word_timestamps=True, condition_on_previous_text=True, 
                                                vad_parameters=dict(
                                                    min_silence_duration_ms=500),
+                                               suppress_tokens = [0,11,13,30],
                                                    ##min_speech_duration_ms=750),
                                                **self.transcribe_kargs)
         #print("List segments is: ", list(segments))
@@ -305,7 +306,7 @@ class OnlineASRProcessor:
         print("RES IS: ", res)
         '''
         # transform to [(beg,end,"word1"), ...]
-        tsw = self.asr.ts_words(res)
+        tsw = self.asr.ts_words(res) # Refer to this to see how they access elements in RES
 
         self.transcript_buffer.insert(tsw, self.buffer_time_offset)
         o = self.transcript_buffer.flush()
@@ -318,29 +319,6 @@ class OnlineASRProcessor:
         if o:
             # we trim all the completed sentences from the audio buffer
             self.chunk_completed_sentence()
-
-            # ...segments could be considered
-            #self.chunk_completed_segment(res)
-
-            # 
-#            self.silence_iters = 0
-
-         # this was an attempt to trim silence/non-linguistic noise detected by the fact that Whisper doesn't transcribe anything for 3-times in a row.
-         # It seemed not working better, or needs to be debugged.
-
-#        elif self.transcript_buffer.complete():
-#            self.silence_iters = 0
-#        elif not self.transcript_buffer.complete():
-#        #    print("NOT COMPLETE:",to_flush(self.transcript_buffer.complete()),file=sys.stderr,flush=True)
-#            self.silence_iters += 1
-#            if self.silence_iters >= 3:
-#                n = self.last_chunked_at
-##                self.chunk_completed_sentence()
-##                if n == self.last_chunked_at:
-#                self.chunk_at(self.last_chunked_at+self.chunk)
-#                print(f"\tCHUNK: 3-times silence! chunk_at {n}+{self.chunk}",file=sys.stderr)
-##                self.silence_iters = 0
-
 
         # if the audio buffer is longer than 30s, trim it...
         if len(self.audio_buffer)/self.SAMPLING_RATE > 1:

@@ -5,4 +5,5 @@
     "[python]": {
         "editor.showUnused": false,
     },
+    "python.terminal.activateEnvInCurrentTerminal": true,
 }

@@ -3,3 +3,9 @@ personal_notes
 .DS_Store
 __pycache__
 whisper-jax-test.py
+pyphonetics_text.py
+setup_festival_mbrola.sh
+test_code_2.py
+flagged/log.csv
+flagged/new_chunk/590d14f40757449165447c1058e9608077f24e57/tmpsdcuy1dq.wav
+.vscode/settings.json
