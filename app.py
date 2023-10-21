@@ -8,6 +8,11 @@ import numpy as np
 
 from whisper_worker import WhisperWorker
 
+import socket
+
+SERVER_HOST = '127.0.0.1'
+SERVER_PORT = 43007
+
 SAMPLE_COUNT = 2048
 
 
@@ -17,21 +22,13 @@ class MainWindow(QMainWindow):
     def __init__(self, device):
         super().__init__()
         
-        self.audio_sample_rate = 48000
+        self.audio_sample_rate = 16000
         self.VAD = VAD(sampleRate=self.audio_sample_rate)
         self.vad_buffer = []
         
-        #self.threadpool = QThreadPool()
-        #print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
-        self.thread = QThread()
-        self.whisper_worker = WhisperWorker()
-        self.whisper_worker.moveToThread(self.thread)
-        self.thread.started.connect(self.whisper_worker.run)
-        #self.whisper_worker.valueChanged.connect(self.valuechange())
-        #self.whisper_worker.start()
-        self.thread.start()
-        #self.threadpool.start(self.whisper_worker)
-        #self.whisper_worker = 
+        #socket
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.connect((SERVER_HOST, SERVER_PORT))
         
         # Create chart
         self._series = QLineSeries()
@@ -84,6 +81,8 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         if self._audio_input is not None:
             self._audio_input.stop()
+        if self.server_socket:
+            self.server_socket.close()
         event.accept()
 
     def valuechange(self):
@@ -94,11 +93,13 @@ class MainWindow(QMainWindow):
         
         # Convert bytes to NumPy array
         numpy_array = np.frombuffer(data.data(), dtype=np.int16)
-        #copied_array = numpy_array.copy()
-        #self.online.insert_audio_chunk(copied_array)
-        #o = self.online.process_iter()
-        #print(o) # do something with current partial output
-        self.whisper_worker.pass_buffer(numpy_array)
+        
+        # Send audio data to the server
+        try:
+            self.server_socket.sendall(data.data())
+        except Exception as e:
+            print(f"Error sending data: {e}")
+        
         if numpy_array.size == 0:
             pass
         else:
@@ -120,6 +121,8 @@ class MainWindow(QMainWindow):
             pass
             
         self._series.replace(self._buffer)
+    
+
 
 
 if __name__ == '__main__':

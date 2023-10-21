@@ -291,12 +291,19 @@ class OnlineASRProcessor:
         #print("CONTEXT:", non_prompt, file=sys.stderr)
         print(f"transcribing {len(self.audio_buffer)/self.SAMPLING_RATE:2.2f} seconds from {self.buffer_time_offset:2.2f}",file=sys.stderr)
         
-        # <?> They have a buffer_time_offset, but still pass in the entire audio_buffer?
         res_and_info = self.asr.transcribe(self.audio_buffer, init_prompt=prompt)
         #print("Res and info is: ", res_and_info)
         res = res_and_info[0]
         info = res_and_info[1]
-
+        '''
+        Transcribed text:   Yes
+        At 0.30 to 0.82:  Yes
+        RES IS:  [Segment(id=1, seek=69, start=0.3, end=0.82, text=' Yes', tokens=[50364, 1079, 50464], 
+        temperature=0.0, avg_logprob=-0.546387568116188, compression_ratio=0.2727272727272727, 
+        no_speech_prob=0.22914041578769684, 
+        words=[Word(start=0.3, end=0.82, word=' Yes', probability=0.11285457015037537)])]
+        print("RES IS: ", res)
+        '''
         # transform to [(beg,end,"word1"), ...]
         tsw = self.asr.ts_words(res)
 
@@ -336,9 +343,10 @@ class OnlineASRProcessor:
 
 
         # if the audio buffer is longer than 30s, trim it...
-        if len(self.audio_buffer)/self.SAMPLING_RATE > 30:
+        if len(self.audio_buffer)/self.SAMPLING_RATE > 1:
             # ...on the last completed segment (labeled by Whisper)
-            self.chunk_completed_segment(res)
+            #self.chunk_completed_segment(res)
+            self.audio_buffer = np.array([],dtype=np.float32)
 
             # alternative: on any word
             #l = self.buffer_time_offset + len(self.audio_buffer)/self.SAMPLING_RATE - 10

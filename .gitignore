@@ -2,3 +2,4 @@
 personal_notes
 .DS_Store
 __pycache__
+whisper-jax-test.py
