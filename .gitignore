@@ -9,3 +9,10 @@ test_code_2.py
 flagged/log.csv
 flagged/new_chunk/590d14f40757449165447c1058e9608077f24e57/tmpsdcuy1dq.wav
 .vscode/settings.json
+audio2.srt
+whisper-faster.exe
+.cache/hub/models--guillaumekln--faster-whisper-medium/refs/main
+_models/faster-whisper-medium/config.json
+_models/faster-whisper-medium/model.bin
+_models/faster-whisper-medium/tokenizer.json
+_models/faster-whisper-medium/vocabulary.txt
