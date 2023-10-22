@@ -101,7 +101,8 @@ class Connection:
     def send(self, line):
         '''it doesn't send the same line twice, because it was problematic in online-text-flow-events'''
         if line == self.last_line:
-            return
+            #return
+            pass
         line_packet.send_one_line(self.conn, line)
         self.last_line = line
 
@@ -171,9 +172,10 @@ class ServerProcessor:
             return None
 
     def send_result(self, o):
-        msg = self.format_output_transcript(o)
-        if msg is not None:
-            self.connection.send(msg)
+        #msg = self.format_output_transcript(o)
+        #if msg is not None:
+            #self.connection.send(msg)
+        self.connection.send(o)
 
     def process(self):
         # handle one client connection
@@ -186,7 +188,10 @@ class ServerProcessor:
             self.online_asr_proc.insert_audio_chunk(a)
             o = online.process_iter()
             try:
-                self.send_result(o)
+                if o is not None:
+                    if (len(o.replace(" ", "")) > 0):
+                        print("<socket-send>", o, "</socket-send>")
+                        self.send_result(o)
             except BrokenPipeError:
                 print("broken pipe -- connection closed?",file=sys.stderr)
                 break

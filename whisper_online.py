@@ -122,7 +122,8 @@ class FasterWhisperASR(ASRBase):
     def transcribe(self, audio, init_prompt="C, D, E, F, L, O, P, T, Z, start, begin, end"):
         # tested: beam_size=5 is faster and better than 1 (on one 200 second document from En ESIC, min chunk 0.01)
         print("*")
-        segments, info = self.model.transcribe(audio, language=self.original_language, initial_prompt=init_prompt, beam_size=5, word_timestamps=True, condition_on_previous_text=True, 
+        #speed settings affected 
+        segments, info = self.model.transcribe(audio, language=self.original_language, initial_prompt=init_prompt, beam_size=5, word_timestamps=True, condition_on_previous_text=False, 
                                                vad_parameters=dict(
                                                    min_silence_duration_ms=500),
                                                suppress_tokens = [0,11,13,30],
@@ -306,22 +307,56 @@ class OnlineASRProcessor:
         print("RES IS: ", res)
         '''
         # transform to [(beg,end,"word1"), ...]
+        print("<res>",res,"</res>")
         tsw = self.asr.ts_words(res) # Refer to this to see how they access elements in RES
+        print("TSW: ", tsw)
 
-        self.transcript_buffer.insert(tsw, self.buffer_time_offset)
-        o = self.transcript_buffer.flush()
-        self.commited.extend(o)
-        print(">>>>COMPLETE NOW:",self.to_flush(o),file=sys.stderr,flush=True)
-        incomplete_sentence = self.to_flush(self.transcript_buffer.complete())
-        print("INCOMPLETE:",incomplete_sentence,file=sys.stderr,flush=True)
+        #self.transcript_buffer.insert(tsw, self.buffer_time_offset)
+        #o = self.transcript_buffer.flush()
+        #self.commited.extend(o)
+        #print(">>>>COMPLETE NOW:",self.to_flush(o),file=sys.stderr,flush=True)
+        #incomplete_sentence = self.to_flush(self.transcript_buffer.complete())
+        #print("INCOMPLETE:",incomplete_sentence,file=sys.stderr,flush=True)
+        
+        current_audio_length = len(self.audio_buffer)/self.SAMPLING_RATE
+        
+        #<!> To do: If already got x amount of words, crop out the first few and send them over first
+        if (len(tsw) > 0):
+            # If end of latest speech segment is more than 2 seconds
+            # (2 seconds of silence)
+            if (len(tsw) > 1):
+                
+                # end time of second last word
+                second_last_end = (tsw[-1][1] * self.SAMPLING_RATE)
+                print("<second_last_end>",second_last_end,"</second_last_end>")
+                print("<audio_buffer_length>",len(self.audio_buffer),"</audio_buffer_length>")
+                self.audio_buffer = self.audio_buffer[-(len(self.audio_buffer) - int(second_last_end) + 1)]
+                
+                transcription = ""
+                for word in tsw:
+                    transcription += word[2] + " "
+                print("<transcribed>", transcription, "</transcribed>")
+                return transcription
+            if (current_audio_length - tsw[-1][1] > 1 ):
+                print("<1 second of silence>")
+                second_last_end = (tsw[-1][1] * self.SAMPLING_RATE)
+                self.audio_buffer = self.audio_buffer[-(len(self.audio_buffer) - int(second_last_end) + 1)]
+                transcription = ""
+                # Add all the words in tsw into return variable
+                for word in tsw:
+                    transcription += word[2] + " "
+                print("<transcribed>", transcription, "</transcribed>")
+                return transcription
 
         # there is a newly confirmed text
+        '''
         if o:
             # we trim all the completed sentences from the audio buffer
             self.chunk_completed_sentence()
+        '''
 
         # if the audio buffer is longer than 30s, trim it...
-        if len(self.audio_buffer)/self.SAMPLING_RATE > 1:
+        if len(self.audio_buffer)/self.SAMPLING_RATE > 10:
             # ...on the last completed segment (labeled by Whisper)
             #self.chunk_completed_segment(res)
             self.audio_buffer = np.array([],dtype=np.float32)
@@ -333,11 +368,18 @@ class OnlineASRProcessor:
             #while k>0 and self.commited[k][1] > l:
             #    k -= 1
             #t = self.commited[k][1] 
-            print(f"chunking because of len",file=sys.stderr)
+            #print(f"chunking because of len",file=sys.stderr)
             #self.chunk_at(t)
+            transcription = ""
+            if (len(tsw) > 0):
+                for word in tsw:
+                        transcription += word[2] + " "
+                print("<transcribed-forced>", transcription, "</transcribed-forced>")
+                return transcription
 
         print(f"len of buffer now: {len(self.audio_buffer)/self.SAMPLING_RATE:2.2f}",file=sys.stderr)
-        return incomplete_sentence
+        return
+        #return incomplete_sentence
         #return self.to_flush(o)
 
     def chunk_completed_sentence(self):
