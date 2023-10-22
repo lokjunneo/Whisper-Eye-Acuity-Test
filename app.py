@@ -1,16 +1,19 @@
 import sys
 from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis
-from PySide6.QtCore import QPointF, Slot, QThreadPool, QThread
+from PySide6.QtCore import QPointF, Slot, QThreadPool, QThread, Signal
 from PySide6.QtMultimedia import QAudioFormat, QAudioSource, QMediaDevices
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QLabel, QWidget, QStackedWidget, QHBoxLayout, QVBoxLayout
 from VAD import VAD
 import numpy as np
-
-from whisper_worker import WhisperWorker
+from state_window import StateWindow
 
 import socket
+from socket_receiver import SocketReceiver
 
-SERVER_HOST = '127.0.0.1'
+from html_viewer import HTMLWindow
+
+#SERVER_HOST = '127.0.0.1'
+SERVER_HOST = '192.168.137.1'
 SERVER_PORT = 43007
 
 SAMPLE_COUNT = 2048
@@ -30,6 +33,23 @@ class MainWindow(QMainWindow):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.connect((SERVER_HOST, SERVER_PORT))
         self.server_socket.setblocking(False)
+        
+        # Windows
+        self.stateWindow = StateWindow()
+        
+        self.html_window = HTMLWindow()
+        
+        # Socket receive thread
+        self.socket_receiver_thread = QThread()
+        self.socketReceiver = SocketReceiver()
+        self.socketReceiver.setup(self.server_socket, self.stateWindow)
+        self.socketReceiver.moveToThread(self.socket_receiver_thread)
+        self.socket_receiver_thread.started.connect(self.socketReceiver.run)
+        #self.socketReceiver.update_signal.connect(self.stateWindow.changeLabel)
+        self.socket_receiver_thread.start()
+        
+        #self.connect(self.socket_receiver_thread, Signal('log1(QString)'), self.stateWindow.label.insertPlainText)
+        
         
         # Create chart
         self._series = QLineSeries()
@@ -78,6 +98,9 @@ class MainWindow(QMainWindow):
         self._buffer = [QPointF(x, 0) for x in range(SAMPLE_COUNT)]
         self._series.append(self._buffer) 
         
+        self.stateWindow.show()
+        self.html_window.show()
+        
 
     def closeEvent(self, event):
         if self._audio_input is not None:
@@ -97,18 +120,7 @@ class MainWindow(QMainWindow):
         # Send audio data to the server
         try:
             self.server_socket.sendall(data.data())
-            while True:
-                try:
-                    recv_data = self.server_socket.recv(2048)
-                    # just in case of unreliable data
-                    if len(recv_data) < 1:
-                        break
-                    #print(recv_data.decode('utf-8'))
-                    socket_recv_data += recv_data
-                except:
-                    break
-            if len(socket_recv_data) >= 1:
-                print("I received: ", socket_recv_data.decode('utf-8'))
+            
         except Exception as e:
             print(f"Error sending data: {e}")
         
