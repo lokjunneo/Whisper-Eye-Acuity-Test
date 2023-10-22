@@ -41,7 +41,8 @@ def send_one_line(socket, text):
         bytes_remaining = len(data) - offset
         if bytes_remaining < PACKET_SIZE:
             padding_length = PACKET_SIZE - bytes_remaining
-            packet = data[offset:] + b'\0' * padding_length
+            #packet = data[offset:] + b'\0' * padding_length
+            packet = data[offset:] + b'' * padding_length
         else:
             packet = data[offset:offset+PACKET_SIZE]
         socket.sendall(packet)
