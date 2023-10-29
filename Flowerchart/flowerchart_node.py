@@ -15,12 +15,12 @@ from __future__ import annotations
 from typing import Callable, Any
 class FlowChartNode:
     # <!> Consider using kwargs, or inheritance will be a nightmare
-    def __init__(self, self_attributes=None, next_node: FlowChartNode = None, context = None):
+    def __init__(self, self_attribute=None, next_node: FlowChartNode = None, context = None):
                 #executable_methods: list[tuple[Callable,dict]] = None):
         
-        # Define self attributes of Node, such as name, id, ...
+        # Define self attribute of Node, such as name, id, ...
         # This attributes belong to the Node itself
-        self.self_attributes = self_attributes
+        self.self_attribute = self_attribute
         
         self.type = self.__class__
         self.previous_node: FlowChartNode = None # automatically assigned
@@ -44,23 +44,23 @@ class FlowChartNode:
         #self.executable_methods = executable_methods
         setattr(self, variable_name, callbacks)
         
-        for method_tuple in getattr(self, variable_name):
+        for method_tuple in getattr(self, variable_name, None):
             
             # Add context into one of the parameters
             # <!> Find a key that is guaranteed unique (perhaps with class name)
             
-            #print(method_tuple[1])
-                
-            method_kwargs = method_tuple[1]
-            method_kwargs["flowerchart_node"] = self
+            if method_tuple is not None:
+                method_kwargs = method_tuple[1]
+                method_kwargs["flowerchart_node"] = self
     
     def _execute(self, callback_var_name):
-        for callback_tuple in getattr(self, callback_var_name):
-            callback: Callable = callback_tuple[0]
-            callback_kwargs: dict = callback_tuple[1]
-            
-            # Unpack method_kwargs
-            callback(**callback_kwargs)
+        if hasattr(self, callback_var_name):
+            for callback_tuple in getattr(self, callback_var_name):
+                callback: Callable = callback_tuple[0]
+                callback_kwargs: dict = callback_tuple[1]
+                
+                # Unpack method_kwargs
+                callback(**callback_kwargs)
     
     def _go_to_node(self, node):
         if node is not None:
@@ -75,7 +75,7 @@ class FlowChartNode:
             if isinstance(node,FlowChartProcessNode):
                 return node.execute()
         
-        return self.next_node
+        return node
     def _go_to_next_node(self):
         return self._go_to_node(self.next_node)
         
@@ -114,8 +114,8 @@ class FlowChartDecisionNode(FlowChartNode):
     false_node: Next node if condition is false
     '''
     
-    def __init__(self, self_attributes=None, next_node: FlowChartNode = None, false_node: FlowChartNode = None, context = None):
-        super().__init__(self_attributes=self_attributes, next_node=next_node, context=context)
+    def __init__(self, self_attribute=None, next_node: FlowChartNode = None, false_node: FlowChartNode = None, context = None):
+        super().__init__(self_attribute=self_attribute, next_node=next_node, context=context)
         
     def set_condition_callbacks(self, condition_callbacks: list[tuple[Callable, dict]] ):
         
@@ -159,6 +159,8 @@ class FlowChartDecisionNode(FlowChartNode):
 def print_kwargs(**kwargs):
     if "output" in kwargs:
         print(kwargs["output"])
+    else:
+        print("Output not found")
     
 def check_user_input(**kwargs):
     user_input = kwargs["conditional_var"]
@@ -174,13 +176,13 @@ def react(**kwargs):
         next_node_attr = "next_node"
     current_node: FlowChartNode = kwargs["flowerchart_node"]
     print("Next node attr is ", next_node_attr)
-    print("Previous previous node self_attributes is ", current_node.previous_node.previous_node.self_attributes)
+    print("Previous previous node self_attribute is ", current_node.previous_node.previous_node.self_attribute)
     print("My next node is ", getattr(current_node, next_node_attr))
     
 if __name__ == "__main__":
     p1 = FlowChartProcessNode()
     p1.set_callbacks( [ (print_kwargs, {"output": "This is p1"}) ] )
-    p2 = FlowChartProcessNode(next_node=p1, self_attributes="p2")
+    p2 = FlowChartProcessNode(next_node=p1, self_attribute="p2")
     p2.set_callbacks([(print_kwargs, {"output": "This is p2"})])
     d1 = FlowChartDecisionNode()
     d1.set_condition_callbacks([(check_user_input, {})])
