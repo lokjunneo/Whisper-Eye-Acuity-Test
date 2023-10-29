@@ -157,8 +157,8 @@ class FlowChartDecisionNode(FlowChartNode):
         
 # Testing method to print out keyword arguments
 def print_kwargs(**kwargs):
-    for key, value in kwargs.items():
-        print(key, ":", value)
+    if "output" in kwargs:
+        print(kwargs["output"])
     
 def check_user_input(**kwargs):
     user_input = kwargs["conditional_var"]
@@ -166,19 +166,30 @@ def check_user_input(**kwargs):
         return True
     else:
         return False
+
+def react(**kwargs):
+    if "next_node_attr" in kwargs:
+        next_node_attr = kwargs["next_node_attr"]
+    else:
+        next_node_attr = "next_node"
+    current_node: FlowChartNode = kwargs["flowerchart_node"]
+    print("Next node attr is ", next_node_attr)
+    print("Previous previous node self_attributes is ", current_node.previous_node.previous_node.self_attributes)
+    print("My next node is ", getattr(current_node, next_node_attr))
+    
 if __name__ == "__main__":
     p1 = FlowChartProcessNode()
-    p1.set_callbacks( [ (print_kwargs, {"a": "haha"}) ] )
-    p2 = FlowChartProcessNode(next_node=p1)
-    p2.set_callbacks([(print_kwargs, {"b": "one"})])
+    p1.set_callbacks( [ (print_kwargs, {"output": "This is p1"}) ] )
+    p2 = FlowChartProcessNode(next_node=p1, self_attributes="p2")
+    p2.set_callbacks([(print_kwargs, {"output": "This is p2"})])
     d1 = FlowChartDecisionNode()
     d1.set_condition_callbacks([(check_user_input, {})])
-    d1.set_false_callbacks([(print_kwargs, {"a": "no a"})])
-    d1.set_true_callbacks([(print_kwargs, {"p": "a detected"})])
+    d1.set_false_callbacks([(react, {"next_node_attr": "false_node"})])
+    d1.set_true_callbacks([(react, {})])
     p1.next_node = d1
     d1.set_false_node(p2)
     p2.execute()
     
-    while d1.execute(input("type a: ")) is not None:
+    while d1.execute(input("Type letter 'a': ")) is not None:
         #print(d1.execute(input("type a: ")))
         pass
