@@ -1,7 +1,9 @@
 '''
-Possible improvements: https://stackoverflow.com/questions/2627002/whats-the-pythonic-way-to-use-getters-and-setters
+< Possible improvements > 
+- https://stackoverflow.com/questions/2627002/whats-the-pythonic-way-to-use-getters-and-setters
+- Partial functions: https://docs.python.org/3/library/functools.html#functools.partial
 
-Need to raise Errors for easier debugging
+- Need to raise Errors for easier debugging
 '''
 # Required import for function declaration of own class type
 # e.g. 
@@ -87,7 +89,7 @@ class FlowChartProcessNode(FlowChartNode):
     # <!> Add constructor that accepts executable_methods
     
     #
-    def set_executable_methods(self, callbacks: list[tuple[Callable, dict]] ):
+    def set_callbacks(self, callbacks: list[tuple[Callable, dict]] ):
         
         self._set_callbacks("callbacks", callbacks)
     
@@ -166,9 +168,9 @@ def check_user_input(**kwargs):
         return False
 if __name__ == "__main__":
     p1 = FlowChartProcessNode()
-    p1.set_executable_methods( [ (print_kwargs, {"a": "haha"}) ] )
+    p1.set_callbacks( [ (print_kwargs, {"a": "haha"}) ] )
     p2 = FlowChartProcessNode(next_node=p1)
-    p2.set_executable_methods([(print_kwargs, {"b": "one"})])
+    p2.set_callbacks([(print_kwargs, {"b": "one"})])
     d1 = FlowChartDecisionNode()
     d1.set_condition_callbacks([(check_user_input, {})])
     d1.set_false_callbacks([(print_kwargs, {"a": "no a"})])
