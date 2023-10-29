@@ -1,6 +1,8 @@
 
 from Flowerchart.flowerchart_node import FlowChartDecisionNode, FlowChartProcessNode, FlowChartNode, FlowChartDelayNode, print_kwargs
 
+from Flowerchart.flowchart_node import *
+from Flowerchart.flowchart_system import *
 #phonemics
 import eng_to_ipa as p
 
@@ -27,10 +29,15 @@ class EyeAcuityTest():
         self.scanning = 1
         
         # <!> Need to use a dict to store sizes of characters
-        self.characters_displayed = []
+        self.characters_displayed = {}
+        self.characters_score = {}
         
         # <!> Map Visual Acuity Measurement to font size (cm can be used)
-        self.vam_to_font_size = {}
+        self.vam_to_font_size = {
+            "6/120": "2cm",
+            "6/60": "1.5cm",
+            "6/45": "1cm"
+        }
         
         self.generable_characters = ['C', 'D', 'E', 'F', 'L', 'O', 'P', 'T', 'Z']
         self.generable_characters_ipa = ["si", "di", 'i', 'ɛf', 'ɛl', 'oʊ', 'pi', 'ti', 'zi']
@@ -76,9 +83,9 @@ class EyeAcuityTest():
         
         # Display 6/120 letter
         self.nodes["Display 6/120 letter"].set_callbacks( [(self.display_characters, 
-                                                            {"num_of_characters": 1,
-                                                             "font_size": "2cm"}),
-                                                           (print_kwargs, {"output": "Display 6/120 letter"}) ] )
+                                                            {"c_array":[{"num_of_characters": 1,"vam_size": "6/120"}]
+                                                             }),
+                                                        ] )
         self.nodes["Display 6/120 letter"].next_node = self.nodes["Validate 6/120"]
         
         # Validate 6/120
@@ -89,19 +96,25 @@ class EyeAcuityTest():
         
         def remove_letters(**kwargs):
             javascript = """
-            var lettersParagraph = document.querySelector(".letters p");
-            lettersParagraph.textContent = "";
+            var lettersContainer = document.querySelector(".letters");
+
+            // Remove all child elements (paragraphs) from the "letters" container
+            while (lettersContainer.firstChild) {
+                lettersContainer.removeChild(lettersContainer.firstChild);
+            }
             """
             self.eye_acuity_wrapper.run_javascript(javascript)
-        self.nodes["Validate 6/120"].set_true_callbacks([ (remove_letters,{}),
-                                                          (print_kwargs, {"output": "SUCCESS"})
+            
+        self.nodes["Validate 6/120"].set_true_callbacks([ (remove_letters,{})
                                                           ])
         self.nodes["Validate 6/120"].next_node = self.nodes["Display 6/60 and 6/45"]
         
         # Display 6/60 and 6/45
         self.nodes["Display 6/60 and 6/45"].set_callbacks( [(self.display_characters, 
-                                                            {"num_of_characters": 2,
-                                                             "font_size": "1.5cm"}),
+                                                            {"c_array":[
+                                                                {"num_of_characters": 1,"vam_size": "6/60"},
+                                                                {"num_of_characters": 1, "vam_size": "6/45"}
+                                                            ]}),
                                                            (print_kwargs, {"output": "Display 6/120 letter"}) ] )
         self.nodes["Display 6/60 and 6/45"].next_node = self.nodes["Validate 6/120"]
         
@@ -131,73 +144,77 @@ class EyeAcuityTest():
         # If kwargs has no parameter "text", text will have a default value of "Insert text"
         text = "Insert text" if ("text" not in kwargs) else kwargs["text"]
         
-        # <!> Work on javascript to modify instructions header
-        #   Instructions header will see very few use however
-        #javascript = "console.log('I will display '" + text + "');"
-        
-        #self.eye_acuity_wrapper.run_javascript(javascript)
-        
     def display_characters(self, **kwargs):
         '''
         Method only supports 1 size, should be revamped to support
         <!> Multiple characters of different sizes
         <!> Random positioning of these characters, no overlap
         '''
-        
-        # <!> Generate characters, based on num_of_characters
-        num_of_characters = kwargs["num_of_characters"]
-        print("Generate ", num_of_characters, " characters")
-        
-        chosen_ones = []
-        chosen_ones = random.sample(self.generable_characters, num_of_characters)
-        self.characters_displayed = chosen_ones
-        chosen_ones = " " .join(chosen_ones)
-        
-        
-        # <!> Write Javascript to generate characters of font size
-        font_size = kwargs["font_size"]
-        print("Characters of font size ", font_size)
-        
-        javascript = f"""
-        // Get the <p> element under the "letters" class
-        var lettersParagraph = document.querySelector(".letters p");
+        for i in kwargs["c_array"]:
+            self.characters_displayed = {}
+            num_of_characters = i["num_of_characters"]
+            vam_size = i["vam_size"]
+            font_size = self.vam_to_font_size[vam_size]
+            # <!> Generate characters, based on num_of_characters
+            #num_of_characters = kwargs["num_of_characters"]
+            print("Generate ", num_of_characters, " characters")
+            
+            chosen_ones = []
+            chosen_ones = random.sample(self.generable_characters, num_of_characters)
+            self.characters_displayed[vam_size] = chosen_ones
+            chosen_ones = " " .join(chosen_ones)
+            
+            # <!> Write Javascript to generate characters of font size
+            print("Characters of font size ", font_size)
+            
+            javascript = f"""
+            // Get the <p> element under the "letters" class
+            var lettersParagraph = document.querySelector(".letters");
 
-        // Define the text you want to set
-        var newText = "{chosen_ones}";
+            var para = document.createElement('p');
+            // Define the text you want to set
+            var newText = "{chosen_ones}";
 
-        // Set the text content of the <p> element
-        lettersParagraph.textContent = newText;
+            // Set the text content of the <p> element
+            para.textContent = newText;
+            
+            para.style.fontSize = "{font_size}";
+            lettersParagraph.appendChild(para);
+            """
+            
+            # <!> Call run_javascript method of eye_acuity_wrapper
+            self.eye_acuity_wrapper.run_javascript(javascript)
         
-        lettersParagraph.style.fontSize = "{font_size}";
-        """
-        
-        # <!> Call run_javascript method of eye_acuity_wrapper
-        self.eye_acuity_wrapper.run_javascript(javascript)
-    
     def check_characters(self, **kwargs):
-        
+        self.characters_score = {}
         user_input = kwargs["conditional_var"]
         user_input = p.convert(user_input).lower()
-        user_input.replace("-"," ")
+        user_input = user_input.replace("-"," ")
         
         # Bandaid for issue: "Letters stuck together may be considered as word, hence ipa conversion fails"
-        if len(user_input) == len(self.characters_displayed):
-            user_input.split("")
+        total_char_length = 0
+        for vam_size, characters in self.characters_displayed.items():
+            total_char_length+=len(characters)
+        if len(user_input) == total_char_length:
+            user_input = user_input.split("")
         else:
-            user_input.split(" ")
+            user_input = user_input.split(" ")
         
-        # For every character displayed
-        # <!> Should start from largest size
-        for cd in self.characters_displayed:
-            # Get the ipa(s) of the displayed character
-            ipas = self.character_ipa_map[cd]
-            ipa_found = False
-            for ipa in ipas:
-                if ipa in user_input:
-                    ipa_found = True
-            # <!> Need to track what could not be read
-            if not ipa_found:
-                print("FAILUE")
+        # Tabulate score for each characters
+        for vam_size,characters in self.characters_displayed.items():
+            self.characters_score[vam_size] = 0
+            for cd in characters:
+                # Get the ipa(s) of the displayed character
+                ipas = self.character_ipa_map[cd]
+                for ipa in ipas:
+                    if ipa in user_input:
+                        # If user said character, score increases
+                        self.characters_score[vam_size] += 1
+                        user_input.remove(ipa)
+                        break
+        
+        for vam_size, score in self.characters_score.items():
+            if len(self.characters_displayed[vam_size]) > score:
                 return False
         return True
         
