@@ -4,6 +4,7 @@
 - Partial functions: https://docs.python.org/3/library/functools.html#functools.partial
 
 - Need to raise Errors for easier debugging
+- Need a revamp to better cover more use cases (e.g. delaynode should have an attachable listener)
 '''
 # Required import for function declaration of own class type
 # e.g. 
@@ -60,6 +61,8 @@ class FlowChartNode:
         
         callbacks = getattr(self, variable_name)
         callbacks.append(callback)
+        method_kwargs = callback[1]
+        method_kwargs["flowerchart_node"] = self
     
     def _execute(self, callback_var_name):
         if hasattr(self, callback_var_name):
@@ -118,7 +121,7 @@ class FlowChartProcessNode(FlowChartNode):
         
         # Returns next_node, None if not assigned
         return self._go_to_next_node()
-    
+
 class FlowChartDecisionNode(FlowChartNode):
     
     '''
@@ -173,9 +176,31 @@ class FlowChartDecisionNode(FlowChartNode):
             return self._go_to_next_node()
         else:
             self._execute("false_callbacks")
-            return self._go_to_node(self.false_node)
+            if self.false_node is not None:
+                return self._go_to_node(self.false_node)
+            else: return self._go_to_node(None)
+
+# <!> Needs overhaul        
+class FlowChartDelayNode(FlowChartNode):
+    
+    def set_callbacks(self, callbacks: list[tuple[Callable, dict]] ):
         
+        self._set_callbacks("callbacks", callbacks)
+    
+    def add_callback(self, callback: tuple[Callable, dict]):
+        return super()._add_callback("callbacks", callback)
+    
+    def execute(self) -> FlowChartNode:
+        # execute currently does not pass in FlowChartNode's self into the methods
+        '''
+        Execute the methods in self.executable methods
+        Then return next_node
+        (Does not automatically execute next_node)
+        '''
+        self._execute("callbacks")
         
+        # Returns next_node, None if not assigned
+        return self._go_to_next_node()
         
         
 # Testing method to print out keyword arguments
