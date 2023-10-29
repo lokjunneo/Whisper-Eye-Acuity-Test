@@ -1,6 +1,6 @@
 import sys
 from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis
-from PySide6.QtCore import QPointF, Slot, QThreadPool, QThread, Signal
+from PySide6.QtCore import QPointF, Slot, QThreadPool, QThread, Signal, QMutex
 from PySide6.QtMultimedia import QAudioFormat, QAudioSource, QMediaDevices
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QLabel, QWidget, QStackedWidget, QHBoxLayout, QVBoxLayout
 from VAD import VAD
@@ -34,15 +34,18 @@ class MainWindow(QMainWindow):
         self.server_socket.connect((SERVER_HOST, SERVER_PORT))
         self.server_socket.setblocking(False)
         
+        self.setFixedHeight(200)
+        self.setFixedWidth(400)
+        
         # Windows
         self.stateWindow = StateWindow()
         
-        self.html_window = HTMLWindow()
+        self.html_window = HTMLWindow(self)
         
         # Socket receive thread
         self.socket_receiver_thread = QThread()
         self.socketReceiver = SocketReceiver()
-        self.socketReceiver.setup(self.server_socket, self.stateWindow)
+        self.socketReceiver.setup(self.server_socket, self.stateWindow, self.html_window) # Attaches signal to slots of state window and html window
         self.socketReceiver.moveToThread(self.socket_receiver_thread)
         self.socket_receiver_thread.started.connect(self.socketReceiver.run)
         #self.socketReceiver.update_signal.connect(self.stateWindow.changeLabel)
@@ -83,6 +86,9 @@ class MainWindow(QMainWindow):
         self._audio_input = QAudioSource(device, format_audio, self)
         self._io_device = self._audio_input.start()
         self._io_device.readyRead.connect(self._readyRead)
+        
+        self.audio_socket_running = True
+        self.audio_socket_mutex = QMutex()
 
         self._chart_view = QChartView(self._chart)
         
@@ -95,7 +101,7 @@ class MainWindow(QMainWindow):
         self.layout.addWidget(self.label)
         self.setCentralWidget(self.widget)
 
-        self._buffer = [QPointF(x, 0) for x in range(SAMPLE_COUNT)]
+        self._buffer = [QPointF(x, 0) for x in range(2048*2)]
         self._series.append(self._buffer) 
         
         self.stateWindow.show()
@@ -112,17 +118,35 @@ class MainWindow(QMainWindow):
     @Slot()
     def _readyRead(self):
         data = self._io_device.readAll()
-        
+        '''
+        self.audio_socket_try_lock = self.audio_socket_mutex.try_lock() # Mutex lock self.audio_socket_running
+        # Make a copy, if you cant get the lock, stop
+        if self.audio_socket_try_lock:
+            print(TRY LOCK)
+            self.audio_socket_running_copy = self.audio_socket_running
+            self.audio_socket_mutex.unlock() #Mutex unlock
+        else:
+            print("TRY LOCK FAILED")
+            return
+        '''
+        self.audio_socket_mutex.lock()
+        self.audio_socket_running_copy = self.audio_socket_running
+        self.audio_socket_mutex.unlock()
+            
         # Convert bytes to NumPy array
         numpy_array = np.frombuffer(data.data(), dtype=np.int16)
         
         socket_recv_data = b'' #consider using bytearray() and .extend instead
         # Send audio data to the server
-        try:
-            self.server_socket.sendall(data.data())
+        if self.audio_socket_running_copy:
+            try:
+                self.server_socket.sendall(data.data())
+                
+            except Exception as e:
+                print(f"Error sending data: {e}")
+        else:
             
-        except Exception as e:
-            print(f"Error sending data: {e}")
+            pass
         
         if numpy_array.size == 0:
             pass
@@ -139,13 +163,27 @@ class MainWindow(QMainWindow):
         try:
         # Not done properly
             for i in range(0, numpy_array.size, 1):
-                self._buffer[i].setY(numpy_array[i] / 32768)
+                self._buffer[i*4].setY(numpy_array[i] / 32768)
                 #print(self._buffer[i].y())
         except:
             pass
             
         self._series.replace(self._buffer)
     
+    # Calling a slot method without signalling seems to stop _audio_input sometimes
+    @Slot()
+    def toggle_audio_socket_running(self):
+        self.audio_socket_mutex.lock()
+        self.audio_socket_running = not self.audio_socket_running
+        self.audio_socket_mutex.unlock()
+        
+        if not self._audio_input.state():
+            print("Audio input semm to have stopped. Reactivating...")
+            self._io_device = self._audio_input.start()
+            self._io_device.readyRead.connect(self._readyRead)
+        
+        print("Toggle called once, ", self.audio_socket_running)
+        
 
 
 
@@ -161,5 +199,5 @@ if __name__ == '__main__':
     available_geometry = main_win.screen().availableGeometry()
     size = available_geometry.height() * 3 / 4
     main_win.resize(size, size)
-    main_win.show()
+    #main_win.show()
     sys.exit(app.exec())

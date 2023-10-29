@@ -7,7 +7,11 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 
 from eye_acuity_test import EyeAcuityTest, EyeAcuityWrapper
 
-from Flowerchart.flowerchart_node import FlowChartDecisionNode, FlowChartProcessNode, FlowChartNode, print_kwargs
+from Flowerchart.flowerchart_node import FlowChartDecisionNode, FlowChartProcessNode, FlowChartNode, FlowChartDelayNode, print_kwargs
+
+# For testing purposes
+from threading import Thread
+import time
 # Audio from https://elevenlabs.io
 # Free version does not cover commercial license
 
@@ -34,7 +38,7 @@ class HTMLWindow(QMainWindow, EyeAcuityWrapper):
         self.setGeometry(100, 100, 800, 600)
         
         # Used to stop audio streaming to server, while audio playing instructions is running
-        self.tts_timer = QTimer()
+        #self.tts_timer = QTimer()
         self.media_player = QMediaPlayer()
         
         self.audioOutput = QAudioOutput()
@@ -42,46 +46,19 @@ class HTMLWindow(QMainWindow, EyeAcuityWrapper):
         
         
         # Attach Main Window's .toggleAudioSocketRunning as listener to playingChanged
-        # Change in playing state will call self.main_window.toggleAudioSocketRunning
+        # Change in playing state will call self.main_window.toggle_audio_socket_running
         self.media_player.playingChanged.connect(self.main_window.toggle_audio_socket_running)
         self.media_player.playingChanged.connect(self.toggle_processing)
 
-        self.html_content = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Eye Acuity Test</title>
-            <style>
-                body {
-                    text-align: center;
-                    font-family: Arial, sans-serif;
-                }
-                .instructions {
-                    font-size: 18px;
-                    margin: 20px;
-                }
-                .letters {
-                    font-size: 1cm;
-                    font-family: monospace;
-                    font-weight: bold;
-                }
-            </style>
-        </head>
-        <body>
-            <h1>Eye Acuity Test</h1>
-            <div class="instructions">
-                <p>Instructions: Stand at a distance of <strong>4 meters</strong> from the screen. Cover one eye with your hand. Read the letters from top to bottom.</p>
-            </div>
-            <div class="letters">
-                <p>E F P T O Z L R N D E</p>
-            </div>
-        </body>
-        </html>
-
-        """
+        with open("eye-acuity-pages/default.html") as f:
+            self.html_content = f.read()
         
         # Load an HTML content
         self.load_html_content()
+        
+        
+        self.eyeacuitytest.execute_process()
+    
         #self.interact_with_page()
 
     def load_html_content(self):
@@ -99,18 +76,23 @@ class HTMLWindow(QMainWindow, EyeAcuityWrapper):
         # self.webview.page().runJavaScript("document.getElementById('change_this').innerHTML = 'This is an example of chaging content with JS!'")
     
     def run_javascript(self, javascript):
-        pass
+        self.webview.page().runJavaScript(javascript)
+    
     
     @Slot(str)
     def processText(self, text):
+        print(self.eyeacuitytest.current_node)
         if self.enable_process_input:
             # <!> If audio is playing, ignore
             if isinstance(self.eyeacuitytest.current_node, FlowChartDecisionNode):
-                self.eyeacuitytest.current_node.check_condition(text)
+                self.eyeacuitytest.execute_decision(text)
     
     @Slot()
     def toggle_processing(self):
         self.enable_process_input = not self.enable_process_input
+        if (self.enable_process_input):
+            if isinstance(self.eyeacuitytest.current_node, FlowChartDelayNode):
+                self.eyeacuitytest.execute_delay()
             
     def play_audio(self, relative_audio_location):
         
@@ -133,12 +115,23 @@ if __name__ == '__main__':
     fake_main_window = FakeMainWindow()
     window = HTMLWindow(fake_main_window)
     window.show()
-    
-    eat = window.eyeacuitytest
-    eat.current_node = eat.current_node.execute()
-    eat.old_node = eat.current_node
-    while eat.old_node == eat.current_node:
-        eat.current_node = eat.current_node.execute(input("Enter input: "))
+    def gui_loop():
+        sys.exit(app.exec())
+    def input_loop():
+        #time.sleep(2)
+        # Wait for window to finish loading
+        eat = window.eyeacuitytest
+        while eat is None:
+            eat = window.eyeacuitytest
+        while eat.current_node is not None:
+            if isinstance(eat.current_node,FlowChartDecisionNode):
+                eat.current_node = eat.current_node.execute(input("Enter input: "))
+            '''
+            elif isinstance(eat.current_node,FlowChartDelayNode):
+                print("<Delay node> Pretending delay has passed")
+                eat.current_node = eat.current_node.execute()
+            '''
+    Thread(target = input_loop).start()
+    gui_loop() #Must be called from main thread
         
-    sys.exit(app.exec_())
     
