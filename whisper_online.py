@@ -140,8 +140,19 @@ class FasterWhisperASR(ASRBase):
             print(f"<<< Segment {seg_count}: ")#, seg)
             
             print("Transcribed text: ", seg.text)
+            old_init = 0
+            old_start = 0.0
+            old_end = 0.0
             for word in seg.words:
+                if old_init:
+                    if (word.start - word.end) == 0:
+                        if (old_start==word.start and old_end==word.end ):
+                            print("<NOT SO FAST>")
+                            print(seg.words)
+                            return (list(), info)
                 print(f"At {word.start:2.2f} to {word.end:2.2f}: {word.word}")
+                old_start = word.start
+                old_end = word.end
             seg_count += 1
             
         #print("List segments is: ", list(segments))
