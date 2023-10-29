@@ -52,6 +52,14 @@ class FlowChartNode:
             if method_tuple is not None:
                 method_kwargs = method_tuple[1]
                 method_kwargs["flowerchart_node"] = self
+
+    
+    def _add_callback(self, variable_name, callback: tuple[Callable, dict]):
+        if not hasattr(variable_name):
+            setattr(self, variable_name, [])
+        
+        callbacks = getattr(self, variable_name)
+        callbacks.append(callback)
     
     def _execute(self, callback_var_name):
         if hasattr(self, callback_var_name):
@@ -86,12 +94,18 @@ class FlowChartNode:
         self.context = context
     
 class FlowChartProcessNode(FlowChartNode):
+    '''
+    callbacks
+    '''
     # <!> Add constructor that accepts executable_methods
     
     #
     def set_callbacks(self, callbacks: list[tuple[Callable, dict]] ):
         
         self._set_callbacks("callbacks", callbacks)
+    
+    def add_callback(self, callback: tuple[Callable, dict]):
+        return super()._add_callback("callbacks", callback)
     
     def execute(self) -> FlowChartNode:
         # execute currently does not pass in FlowChartNode's self into the methods
@@ -129,6 +143,15 @@ class FlowChartDecisionNode(FlowChartNode):
         
         # Sets self.true_callbacks = true_callbacks, and stores self as value to flowerchart_node key
         self._set_callbacks("true_callbacks", true_callbacks)
+        
+    def add_condition_callback(self, condition_callback: tuple[Callable, dict]):
+        self._add_callback("condition_callbacks", condition_callback)
+        
+    def add_false_callback(self, false_callback: tuple[Callable, dict]):
+        self._add_callback("false_callbacks", false_callback)
+    
+    def add_true_callback(self, true_callback: tuple[Callable, dict]):
+        self._add_callback("true_callbacks", true_callback)
     
     def set_false_node(self, false_node):
         self.false_node = false_node
@@ -182,10 +205,13 @@ def react(**kwargs):
 if __name__ == "__main__":
     p1 = FlowChartProcessNode()
     p1.set_callbacks( [ (print_kwargs, {"output": "This is p1"}) ] )
+    
     p2 = FlowChartProcessNode(next_node=p1, self_attribute="p2")
     p2.set_callbacks([(print_kwargs, {"output": "This is p2"})])
+    
     d1 = FlowChartDecisionNode()
     d1.set_condition_callbacks([(check_user_input, {})])
+    
     d1.set_false_callbacks([(react, {"next_node_attr": "false_node"})])
     d1.set_true_callbacks([(react, {})])
     p1.next_node = d1
