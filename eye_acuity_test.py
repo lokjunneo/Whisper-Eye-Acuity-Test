@@ -65,7 +65,7 @@ class EyeAcuityTest(FlowchartSystem):
         node.context["letters_spoken"] = False
         
         Progress
-        node.context["both_eyes"] = 0
+        node.context["second_eye"] = 0
         node.context["pinhole"] = 0
         node.context["va_score"] = {
             "left": "6/15 3 characters"
@@ -113,8 +113,8 @@ class EyeAcuityTest(FlowchartSystem):
         Callback methods
         '''
         
-        def set_progress_callback(node, both_eyes, pinhole):
-            node.context["both_eyes"] = 0
+        def set_progress_callback(node, second_eye, pinhole):
+            node.context["second_eye"] = 0
             node.context["pinhole"] = 0
             
         def check_for_start_callback(node):
@@ -123,6 +123,12 @@ class EyeAcuityTest(FlowchartSystem):
             if "start" in text or "begin" in text:
                 return True
             return False  
+        
+        def play_initial_instructions_process(node):
+            if not node.context["second_eye"]:
+                self.play_audio("/tts_recordings/stand_4_meters_away.mp3")
+            else:
+                self.play_audio()
         
         def generic_error(this: DecisionNode):
             self.play_audio("/tts_recordings/please_try_again.mp3")
@@ -136,8 +142,8 @@ class EyeAcuityTest(FlowchartSystem):
             print("<Decision> Pinhole is now ", this.context["pinhole"])
             return this.context["pinhole"]
         
-        def both_eyes_tested_decision(this: FlowChartNode):
-            return this.context["both_eyes"]
+        def second_eye_tested_decision(this: FlowChartNode):
+            return this.context["second_eye"]
         
         def able_to_read_all(node: ProcessNode, vam_size):
             if len(node.context["characters_displayed"][vam_size]) > node.context["characters_score"][vam_size]:
@@ -166,11 +172,11 @@ class EyeAcuityTest(FlowchartSystem):
                     break
             score = context["characters_score"][failed_vam_size]
             max_score = len(context["characters_displayed"][failed_vam_size])
-            if context["both_eyes"]:
+            if context["second_eye"]:
                 context["va_score"]["right"] = vam_size + ": " + str(score) + " / " + str(max_score)
             else:
                 #!!! Testing purposes
-                context["both_eyes"] = 1
+                context["second_eye"] = 1
                 context["va_score"] = {"left": vam_size + ": " + str(score) + " / " + str(max_score)}
                 
             print(" Computer VA Score ")
@@ -179,7 +185,15 @@ class EyeAcuityTest(FlowchartSystem):
         def print_report_process(node: ProcessNode):
             context = node.context
             print("<PRINT REPORT> ", context["va_score"])
-            self.display_text(str(context["va_score"]).replace("{","").replace("}",""))
+            report_text = "(Left eye) " + context["va_score"]["left"]
+            if "right" in context["va_score"]: report_text += "| (Right eye) " + context["va_score"]["right"]
+            self.display_text(report_text)
+            
+            # Clear report after printing
+            if "right" in context["va_score"]:
+                set_progress_callback(node, 0,0)
+                del context["va_score"]
+                
         '''
         Node generating functions
         '''        
@@ -333,7 +347,7 @@ class EyeAcuityTest(FlowchartSystem):
             
             # Play instruction audio
             pia = self.nodes["Play initial audio"]
-            pia.callback = partial(self.play_audio, "/tts_recordings/stand_4_meters_away.mp3")
+            pia.callback = partial(play_initial_instructions_process, pia)
             pia.next_node = self.nodes["Wait for initial audio finish"]
         
         if "Compute VA Score":
@@ -391,7 +405,7 @@ class EyeAcuityTest(FlowchartSystem):
             
             # Loop at 6/60 and 6/45 for demo purposes
             nodes["validate_6/45"].true_node = nodes["display"]
-            precise_nodes["validate_6/60"].true_node = precise_nodes["display"]
+            precise_nodes["validate_6/60"].true_node = precise_nodes["validate_6/60"].false_node #precise_nodes["display"]
         
     '''
     Methods used for acuity test display
