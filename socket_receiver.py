@@ -5,14 +5,19 @@ import time
 class SocketReceiver(QThread):
 
     update_signal = Signal(str)
+    #phonemic_signal = Signal(str,str)
+    html_update_signal = Signal(str)
     def __init__(self):
         super(SocketReceiver, self).__init__()
         self.socket_recv_data = b''
     
-    def setup(self, socket, stateWindow):
+    def setup(self, socket, stateWindow, htmlWindow):
         self.server_socket = socket
         self.stateWindow = stateWindow
+        self.htmlWindow = htmlWindow
         self.update_signal.connect(stateWindow.changeLabel)
+        self.html_update_signal.connect(htmlWindow.processText)
+        #self.phonemic_signal.connect(stateWindow.updatePhonemics)
 
     def run(self):
         self.running = True
@@ -37,6 +42,9 @@ class SocketReceiver(QThread):
                 #self.emit(Signal('log1(QString)'), decoded_received_data)
                 #self.emit(Signal('log1(QString)'), decoded_received_data)
                 self.update_signal.emit(decoded_received_data)
+                self.html_update_signal.emit(decoded_received_data)
+                
+                #self.phonemic_signal.emit(decoded_received_data, "en-us")
                 self.socket_recv_data = b''
                 
         

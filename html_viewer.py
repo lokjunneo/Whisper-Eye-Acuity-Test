@@ -1,12 +1,32 @@
 import sys
-from PySide6.QtCore import Qt, QUrl
+from collections import OrderedDict
+from PySide6.QtCore import Qt, QUrl, QTimer, Slot, QFileInfo, QDir
+from PySide6.QtMultimedia import QSoundEffect, QMediaPlayer, QAudioOutput
 from PySide6.QtWidgets import QApplication, QMainWindow
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
-class HTMLWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
+from eye_acuity_test import EyeAcuityTest, EyeAcuityWrapper
 
+from Flowerchart.flowerchart_node import FlowChartDecisionNode, FlowChartProcessNode, FlowChartNode, FlowChartDelayNode, print_kwargs
+
+# For testing purposes
+from threading import Thread
+import time
+# Audio from https://elevenlabs.io
+# Free version does not cover commercial license
+
+
+        
+class HTMLWindow(QMainWindow, EyeAcuityWrapper):
+    def __init__(self, main_window):
+        super().__init__()
+        
+        # A boolean used to determine if input should be processed or not
+        #   Set to false when audio is playing
+        self.enable_process_input = True
+        self.main_window = main_window
+
+        self.eyeacuitytest = EyeAcuityTest(self)
         # Create a QWebEngineView widget
         self.webview = QWebEngineView(self)
 
@@ -14,56 +34,31 @@ class HTMLWindow(QMainWindow):
         self.setCentralWidget(self.webview)
 
         # Set window properties
-        self.setWindowTitle("HTML Viewer")
+        self.setWindowTitle("Eye Acuity Test")
         self.setGeometry(100, 100, 800, 600)
         
-        self.html_content = """
-        <html>
-        <head>
-            <title>HTML Viewer</title>
-        </head>
-        <body>
-            <h1>Hello, PySide6!</h1>
-            <p id='change_this'>This is an example of loading HTML content in a PySide6 window.</p>
-        </body>
-        </html>
-        """
+        # Used to stop audio streaming to server, while audio playing instructions is running
+        #self.tts_timer = QTimer()
+        self.media_player = QMediaPlayer()
         
-        self.html_content = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Eye Acuity Test</title>
-            <style>
-                body {
-                    text-align: center;
-                    font-family: Arial, sans-serif;
-                }
-                .instructions {
-                    font-size: 18px;
-                    margin: 20px;
-                }
-                .letters {
-                    font-size: 36px;
-                    font-weight: bold;
-                }
-            </style>
-        </head>
-        <body>
-            <h1>Eye Acuity Test</h1>
-            <div class="instructions">
-                <p>Instructions: Stand at a distance of <strong>10 feet (3 meters)</strong> from the screen. Cover one eye with your hand. Read the letters from top to bottom.</p>
-            </div>
-            <div class="letters">
-                <p>E F P T O Z L R N D E</p>
-            </div>
-        </body>
-        </html>
+        self.audioOutput = QAudioOutput()
+        self.media_player.setAudioOutput(self.audioOutput)
+        
+        
+        # Attach Main Window's .toggleAudioSocketRunning as listener to playingChanged
+        # Change in playing state will call self.main_window.toggle_audio_socket_running
+        self.media_player.playingChanged.connect(self.main_window.toggle_audio_socket_running)
+        self.media_player.playingChanged.connect(self.toggle_processing)
 
-        """
+        with open("eye-acuity-pages/default.html") as f:
+            self.html_content = f.read()
         
         # Load an HTML content
         self.load_html_content()
+        
+        
+        self.eyeacuitytest.run()
+    
         #self.interact_with_page()
 
     def load_html_content(self):
@@ -77,10 +72,63 @@ class HTMLWindow(QMainWindow):
 
     def interact_with_page(self):
         pass
-        #self.webview.page().runJavaScript("document.getElementById('change_this').innerHTML = 'This is an example of chaging content with JS!'")
+        # Code to run Javascript on loaded html page
+        # self.webview.page().runJavaScript("document.getElementById('change_this').innerHTML = 'This is an example of chaging content with JS!'")
+    
+    def run_javascript(self, javascript):
+        self.webview.page().runJavaScript(javascript)
+    
+    
+    @Slot(str)
+    def processText(self, text):
+        print(self.eyeacuitytest.current_node)
+        if self.enable_process_input:
+            self.eyeacuitytest.signal("process_text", text)
+    
+    @Slot()
+    def toggle_processing(self):
+        self.enable_process_input = not self.enable_process_input
+        if (self.enable_process_input):
+            self.eyeacuitytest.signal("audio_done")
+            
+    def play_audio(self, relative_audio_location):
+        
+        try:
+            print("file://" + QDir.currentPath() + relative_audio_location)
+            self.media_player.setSource(QUrl.fromLocalFile(QDir.currentPath() + relative_audio_location))
+            self.media_player.setPosition(0)
+            
+            self.media_player.play()
+        except:
+            print("Audio play failed")
 
-if __name__ == "__main__":
+class FakeMainWindow(QMainWindow):
+    @Slot()
+    def toggle_audio_socket_running(self):
+        pass
+if __name__ == '__main__':
+    
     app = QApplication(sys.argv)
-    window = HTMLWindow()
+    fake_main_window = FakeMainWindow()
+    window = HTMLWindow(fake_main_window)
     window.show()
-    sys.exit(app.exec_())
+    def gui_loop():
+        sys.exit(app.exec())
+    def input_loop():
+        #time.sleep(2)
+        # Wait for window to finish loading
+        eat = window.eyeacuitytest
+        while eat is None:
+            eat = window.eyeacuitytest
+        while eat.current_node is not None:
+            if isinstance(eat.current_node,FlowChartDecisionNode):
+                eat.current_node = eat.current_node.execute(input("Enter input: "))
+            '''
+            elif isinstance(eat.current_node,FlowChartDelayNode):
+                print("<Delay node> Pretending delay has passed")
+                eat.current_node = eat.current_node.execute()
+            '''
+    Thread(target = input_loop).start()
+    gui_loop() #Must be called from main thread
+        
+    

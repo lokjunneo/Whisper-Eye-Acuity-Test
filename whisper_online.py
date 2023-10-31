@@ -119,7 +119,7 @@ class FasterWhisperASR(ASRBase):
 #        model = WhisperModel(modelsize, device="cpu", compute_type="int8") #, download_root="faster-disk-cache-dir/")
         return model
 
-    def transcribe(self, audio, init_prompt="C, D, E, F, L, O, P, T, Z, start, begin, end"):
+    def transcribe(self, audio, init_prompt="I will only say English alphabets and the words 'start', 'begin' or 'end'. "):
         # tested: beam_size=5 is faster and better than 1 (on one 200 second document from En ESIC, min chunk 0.01)
         print("*")
         #speed settings affected 
