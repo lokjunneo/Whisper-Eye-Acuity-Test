@@ -1,10 +1,11 @@
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QVBoxLayout, QWidget, QPlainTextEdit
-from PySide6.QtCore import QRunnable, Slot, Signal, QThread, QMutex
-from PySide6.QtCore import Slot
+from PySide6.QtCore import QRunnable, Slot, Signal, QThread, QMutex, Qt, Q_ARG
+from PySide6.QtGui import QTextCursor
+from PySide6.QtCore import Slot, QMetaObject
 
 import requests
-from phonemizer import phonemize
-from phonemizer.separator import Separator
+
+import eng_to_ipa as p
 
 class StateWindow(QWidget):
     """
@@ -13,6 +14,9 @@ class StateWindow(QWidget):
     """
     def __init__(self):
         super().__init__()
+        
+        self.setWindowTitle("Transcription Viewer")
+        
         layout = QVBoxLayout()
         self.label = QPlainTextEdit()
         layout.addWidget(self.label)
@@ -21,53 +25,13 @@ class StateWindow(QWidget):
         layout.addWidget(self.phonemics_text_edit)
         self.setLayout(layout)
         
-        # Create a worker thread
-        self.worker_thread = QThread()
-        self.worker = Worker()
-        self.worker.moveToThread(self.worker_thread)
-        self.worker.updatePhonemicsSignal.connect(self.updatePhonemics)
-        self.worker_thread.started.connect(self.worker.run)
     
     @Slot()
     def changeLabel(self,text):
         if text != "" or text is not None:
             self.label.insertPlainText(text)
-            #self.updatePhonemics(text,"en-us")
-            language = "en-us"
-            self.worker.updatePhonemicsSignal.emit(text, language)
-    
-    @Slot(str, str)
-    def updatePhonemics(self,text,language):
-        phn = phonemize(
-                    text,
-                    language=language,
-                    backend='espeak',  # brew install espeak, then add lib to variable PHONEMIZER_ESPEAK_LIBRARY
-                    separator=Separator(phone=None, word=' ', syllable='|'),
-                    strip=True,
-                    preserve_punctuation=True,
-                    njobs=1)
-        self.phonemics_text_edit.insertPlainText(phn)
-        
-        pass
-    
-    
-class Worker(QThread):
-    updatePhonemicsSignal = Signal(str, str)
-
-    def __init__(self):
-        super().__init__()
-        self.text = ""
-
-    def run(self):
-        while True:
-            #text, language = self.updatePhonemicsSignal.emit()
-            if self.text is not None or self.text != "":
-                    phn = phonemize(
-                        self.text,
-                        language="en-us ",
-                        backend='espeak',  # brew install espeak, then add lib to variable PHONEMIZER_ESPEAK_LIBRARY
-                        separator=Separator(phone=None, word=' ', syllable='|'),
-                        strip=True,
-                        preserve_punctuation=True,
-                        njobs=1)
-                    self.phonemicsUpdatedSignal.emit(phn)
+            
+            self.label.moveCursor(QTextCursor.End)
+            self.phonemics_text_edit.insertPlainText(p.convert(text) +"\n")
+            
+            self.phonemics_text_edit.moveCursor(QTextCursor.End)

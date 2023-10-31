@@ -43,11 +43,34 @@ class EyeAcuityTest(FlowchartSystem):
         self.character_ipa_map = {
             "C": ["si"], "D": ["di"], "E": ['i'], 
             "F": ['ɛf'],"L": ['ɛl'],"O": ['oʊ'],
-            "P": ['pi'],"T": ['ti'],"Z": ['zi', 'zæk']
+            "P": ['pi'],"T": ['ti'],"Z": ['zi', 'zæk', 'zek*','zɛk','zeee']
         }
         # <!> Need to map generable_characters to ipa
         
         self.eye_acuity_wrapper = eye_acuity_wrapper
+        
+        '''
+        Node context used
+        e.g.
+        Test
+        node.context["characters_displayed"] = {"6/120" : ["a", "b"]}
+        node.context["characters_score"] = {"6/120": 1}
+        
+        Progress
+        node.context["both_eyes"] = 0
+        node.context["pinhole"] = 0
+        node.context["va_score"] = {
+            "left": "6/15 3 characters"
+            "right": "6/15 1 character"
+        }
+        
+        Signals
+        node.context["process_text"] = "Text to process"
+        node.context["audio_done"]: (DelayNode) When signaled, goes on to next node
+        
+        Reusable node combinations:
+        Display -> Wait
+        '''
         
         self.nodes = {
             "Default state": ProcessNode(), #Unsure if working
@@ -59,54 +82,108 @@ class EyeAcuityTest(FlowchartSystem):
             "wait_input": IONode(),
             "check_score": ProcessNode(),
             "able_to_read_all": DecisionNode(),
+            "able_to_read_50": DecisionNode(),
             "display_node": ProcessNode(),
             "pinhole_node": ProcessNode(),
+            "Reset node": ProcessNode(),
             
             "Display 6/120 letter": {},
             "Alert PSA": DecisionNode(),
-            "Read 6/120": IONode(),
-            "Validate 6/120": DecisionNode(),
             "Generic error": ProcessNode(), # Don't define next_node; it is dynamic
-            "Generic read": DelayNode(), #Cloneable, to wait for text input
-            "Generic validate": DecisionNode(), #Cloneable, to validate input
-            "Generic clear screen": ProcessNode(), #Cloneable, to remove letters
-            "Reset node": ProcessNode(),
             "Display 6/60 and 6/45": {},
+            
+            # Only once when ending
+            "Compute VA Score": ProcessNode(),
+            "Print report": ProcessNode()
         }
-        '''
-        Node context used
-        e.g.
-        Test
-        node.context["characters_displayed"] = {"6/120" : ["a", "b"]}
-        node.context["characters_score"] = {"6/120": 1}
         
-        Progress
-        node.context["both_eyes"] = 0
-        node.context["pinhole"] = 0
-        
-        Signals
-        node.context["process_text"] = "Text to process"
-        node.context["audio_done"]: (DelayNode) When signaled, goes on to next node
-        
-        Reusable node combinations:
-        Display -> Wait
-        '''
         # Set up the reusable nodes, get them ready for copying
         self.nodes["wait_input"].set_signal_key("process_text")
-        self.nodes["check_score"].callback = partial(self.check_characters, self.nodes["check_score"])
+        self.nodes["check_score"].callback = partial(self.calculate_score, self.nodes["check_score"])
         
-        def set_progress(node, both_eyes, pinhole):
+        '''
+        Callback methods
+        '''
+        
+        def set_progress_callback(node, both_eyes, pinhole):
             node.context["both_eyes"] = 0
             node.context["pinhole"] = 0
             
-        def check_for_start(node):
+        def check_for_start_callback(node):
             text = node.context["process_text"]
             text = text.lower()
             if "start" in text or "begin" in text:
                 return True
-            return False
+            return False  
+        
+        def generic_error(this: DecisionNode):
+            self.play_audio("/tts_recordings/please_try_again.mp3")
+        
+        def pinhole_callback(this: FlowchartNode ):
+            this.context["pinhole"] = 1
+            print("Pinhole is now ", this.context["pinhole"])
+            self.play_audio("/tts_recordings/pinhole.mp3")        
+    
+        def is_using_pinhole_decision(this: FlowchartNode):
+            print("<Decision> Pinhole is now ", this.context["pinhole"])
+            return this.context["pinhole"]
+        
+        def both_eyes_tested_decision(this: FlowChartNode):
+            return this.context["both_eyes"]
+        
+        def able_to_read_all(node: ProcessNode, vam_size):
+            if len(node.context["characters_displayed"][vam_size]) > node.context["characters_score"][vam_size]:
+                print("Unable to read all of ", vam_size)
+                return False
+            print("Able to read all of ", vam_size)
+            return True
+        
+        def able_to_read_50(node: ProcessNode, vam_size):
+            if len(node.context["characters_displayed"][vam_size]) > node.context["characters_score"][vam_size]*2:
+                print("Unable to read 50% of ", vam_size)
+                return False
+            print("Able to read 50% of ", vam_size)
+            return True
+
+        def compute_va_score_process(node: ProcessNode):
+            context = node.context
+            vam_sizes = context["characters_displayed"].keys()
+            failed_vam_size = ""
+            for vam_size in vam_sizes:
+                if not able_to_read_all(node, vam_size):
+                    failed_vam_size = vam_size
+                    break
+            score = context["characters_score"][failed_vam_size]
+            max_score = len(context["characters_displayed"][failed_vam_size])
+            if context["both_eyes"]:
+                context["va_score"]["right"] = vam_size + ": " + str(score) + " / " + str(max_score)
+            else:
+                #!!! Testing purposes
+                context["both_eyes"] = 1
+                context["va_score"] = {"left": vam_size + ": " + str(score) + " / " + str(max_score)}
+                
+            print(" Computer VA Score ")
+            print(context["va_score"])
+            
+        def print_report_process(node: ProcessNode):
+            context = node.context
+            print("<PRINT REPORT> ", context["va_score"])
+            self.display_text(str(context["va_score"]).replace("{","").replace("}",""))
+        '''
+        Node generating functions
+        '''        
+        # Add wait and check blocks behind given node
+        def add_wait_check(node) -> IONode: 
+            wait_input = copy.copy(self.nodes["wait_input"])
+            check_score = copy.copy(self.nodes["check_score"])
+            node.next_node = wait_input
+            wait_input.next_node = check_score
+            return check_score
         
         def generate_one_per_size(*vam):
+            '''
+            Generate nodes Display => Read out => Able to read? => Able to read? ...
+            '''
             # Tuples to pass in as parameter into display_characters 
             display_tuples = []
             for i in vam:
@@ -129,10 +206,16 @@ class EyeAcuityTest(FlowchartSystem):
             }
             # Generate validate nodes, per item in vam
             # node => display_node => wait_input => check_score => validate_6/120 => validate_6/60...
+            curr_node_is_validate_node = False
             for i in vam:
                 validate_node = copy.copy(self.nodes["able_to_read_all"])
                 validate_node.callback = partial(able_to_read_all, validate_node, i)
-                curr_node.next_node = validate_node
+                if not curr_node_is_validate_node:
+                    curr_node.next_node = validate_node
+                    curr_node_is_validate_node = 1
+                else:
+                    curr_node.true_node = validate_node
+                
                 curr_node = validate_node
                 return_dict["validate_"+i] = validate_node
             '''
@@ -141,79 +224,82 @@ class EyeAcuityTest(FlowchartSystem):
                 "wait": display_node.next_node,
                 "calculate": display_node.next_node.next_node
                 "validate_6/120": display_node.next_node.next_node.next_node
+                "validate_6/60": display_node.next_node.next_node.next_node.next_node
                 ...
             }
             '''
             return return_dict
             #print(*generate_display_tuples)     
         
-        def generic_error(this: DecisionNode):
-            self.eye_acuity_wrapper.play_audio("/tts_recordings/please_try_again.mp3")
-        
-        def pinhole(this: FlowchartNode ):
-            this.context["pinhole"] = 1
-            self.eye_acuity_wrapper.play_audio("/tts_recordings/pinhole.mp3")        
-            
-        def generate_pinhole_node() -> FlowChartNode:            
+        # Generate "Use pinhole" node
+        def generate_pinhole_node(next_node: FlowChartNode = None) -> FlowChartNode:            
             pinhole_node = copy.copy(self.nodes["pinhole_node"])
-            pinhole_node.callback = partial(pinhole, pinhole_node)
+            pinhole_node.callback = partial(pinhole_callback, pinhole_node)
+            pinhole_node.next_node = next_node
             return pinhole_node
-            
-            
-        def assign_generic_rv(curr_node, true_node):
+
+        def generate_multiple_one_size(vam_size, num_of_char):
             '''
-            Generic block to wait for input, then validate input, then clear screen if letters are read correctly
-            '''
-            my_gr = copy.copy(self.gr)
-            my_gv = copy.copy(self.gv)
-            my_gcs = copy.copy(self.gcs)
-            curr_node.next_node = my_gr
-            my_gr.next_node = my_gv
-            my_gv.callback = partial(self.check_characters, my_gv)
-            my_gv.false_node = self.ge
-            my_gv.true_node = my_gcs
-            my_gcs.next_node = true_node
-        
-        # Add wait and check blocks behind given node
-        # <!> Can add able_to_read below
-        def add_wait_check(node) -> IONode: 
-            wait_input = copy.copy(self.nodes["wait_input"])
-            check_score = copy.copy(self.nodes["check_score"])
-            node.next_node = wait_input
-            wait_input.next_node = check_score
-            return check_score
+            Note: Will need to manually assign: 
             
-        def able_to_read_all(node: ProcessNode, vam_size):
-            if len(node.context["characters_displayed"][vam_size]) > node.context["characters_score"][vam_size]:
-                return False
-            return True
+                "validate_{vam_size}" true node
+                
+            --- 
+            
+            Return
+            
+            {
+                "display": display_node,
+                "wait": display_node.next_node,
+                "calculate": display_node.next_node.next_node
+                "validate_{vam_size}": display_node.next_node.next_node.next_node
+            }
+            '''
+            # <!> Need result screen node
+            
+            # Set up the display nodes
+            display_node = ProcessNode() #copy.copy(self.nodes["display_node"])
+            display_node.callback = partial(self.display_characters, display_node, (num_of_char, vam_size))
+            
+            # curr_node is now the "latest" node, at "check_score"
+            # node => display_node => wait_input => check_score
+            curr_node = add_wait_check(display_node)
+            
+            # Generate validate node (able to read >50%?)
+            score_validate = copy.copy(self.nodes["able_to_read_50"])
+            score_validate.callback = partial(able_to_read_50, score_validate, vam_size)
+            
+            curr_node.next_node = score_validate
+            curr_node = score_validate
+            
+            is_using_pinhole_node: DecisionNode = DecisionNode()
+            is_using_pinhole_node.callback = partial(is_using_pinhole_decision, is_using_pinhole_node)
+            is_using_pinhole_node.false_node = generate_pinhole_node(display_node.next_node)
+            is_using_pinhole_node.true_node = self.nodes["Compute VA Score"]
+            score_validate.false_node = is_using_pinhole_node
+            
+            return_dict = {
+                "display": display_node,
+                "wait": display_node.next_node,
+                "calculate": display_node.next_node.next_node,
+                "validate_" + vam_size: display_node.next_node.next_node.next_node,
+                "is_using_pinhole_node": is_using_pinhole_node
+            }
+            return return_dict
         
-        '''
-        Generic cloneable nodes
-        '''
+        
         self.ge = self.nodes["Generic error"]
         self.ge.callback = partial(generic_error, self.ge)
-        
-        # Cloneable to wait for user input
-        self.gr = self.nodes["Generic read"]
-        self.gr.set_signal_key("process_text")
-        
-        self.gv = self.nodes["Generic validate"]
-        
-        self.gcs = self.nodes["Generic clear screen"]
-        self.gcs.callback = self.remove_letters
-        
-        self.current_node = self.nodes["Reset node"]
-        
         # Reset node
         reset_n = self.nodes["Reset node"]
-        reset_n.callback = partial(set_progress, reset_n, 0, 0)
+        reset_n.callback = partial(set_progress_callback, reset_n, 0, 0)
         reset_n.next_node = self.nodes["Default state"]
+        self.current_node = reset_n
         
         if 'wait until "start" or "begin"':
             # Default state
             default_n = self.nodes["Default state"]
-            default_n.callback = partial(self.remove_letters) #partial(self.display_instructions)
+            #default_n.callback = partial(self.remove_letters) #partial(self.display_instructions)
             default_n.next_node = self.nodes["Listen for start"]
             
             # Wait for start Command
@@ -222,14 +308,29 @@ class EyeAcuityTest(FlowchartSystem):
             
             # Did the person say the Start command?
             cfs = self.nodes["Check for start"]
-            cfs.callback = partial(check_for_start, cfs)
+            cfs.callback = partial(check_for_start_callback, cfs)
             cfs.false_node = self.nodes["Default state"]
             cfs.true_node = self.nodes["Play initial audio"]
             
             # Play instruction audio
             pia = self.nodes["Play initial audio"]
-            pia.callback = partial(self.eye_acuity_wrapper.play_audio, "/tts_recordings/stand_4_meters_away.mp3")
+            pia.callback = partial(self.play_audio, "/tts_recordings/stand_4_meters_away.mp3")
             pia.next_node = self.nodes["Wait for initial audio finish"]
+        
+        if "Compute VA Score":
+            compute_va_score_node = self.nodes["Compute VA Score"]
+            compute_va_score_node.callback = partial(compute_va_score_process, compute_va_score_node)
+        
+        if "Print report":
+            print_report_node = self.nodes["Print report"]
+            print_report_node.callback = partial(print_report_process, print_report_node)
+            #print_report_node.next_node = self.nodes["Reset node"]
+            print_report_node.next_node = self.nodes["Default state"]
+            
+            
+            # !!! For testing only
+            compute_va_score_node.next_node = print_report_node
+            
         
         # Block until audio is done
         wiaf = self.nodes["Wait for initial audio finish"]
@@ -251,9 +352,6 @@ class EyeAcuityTest(FlowchartSystem):
             nodes["validate_6/120"].false_node.next_node = nodes["wait"]
             
             self.nodes["Display 6/120 letter"] = nodes
-            
-            # Unassigned:
-            # validate_6/120 true node
         
         if "Display 6/60 and 6/45":
             v6120 = self.nodes["Display 6/120 letter"]["validate_6/120"]
@@ -266,15 +364,15 @@ class EyeAcuityTest(FlowchartSystem):
             # Link previous node to current nodes
             #   link v6120 => display
             v6120.true_node = nodes["display"]  
-            nodes["validate_6/60"].false_node = generate_pinhole_node()
-            nodes["validate_6/60"].false_node.next_node = nodes["wait"]
-            nodes["validate_6/60"].true_node = nodes["display"]
-            #print(nodes["validate_6/60"].false_node)
             
+            precise_nodes = generate_multiple_one_size("6/60", 3)
+            nodes["validate_6/60"].false_node = generate_pinhole_node(precise_nodes["display"])
             
-        #d660645 = self.nodes["Display 6/60 and 6/45"]
-        #d660645.callback = partial(self.display_characters, d660645, (1, "6/60"), (1, "6/45"))
-        #assign_generic_rv(d660645, d660645)
+            nodes["validate_6/45"].false_node = precise_nodes["display"]
+            
+            # Loop at 6/60 and 6/45 for demo purposes
+            nodes["validate_6/45"].true_node = nodes["display"]
+            precise_nodes["validate_6/60"].true_node = precise_nodes["display"]
         
     '''
     Methods used for acuity test display
@@ -293,7 +391,10 @@ class EyeAcuityTest(FlowchartSystem):
             """
             #node.context["characters_displayed"] = {}
             self.eye_acuity_wrapper.run_javascript(javascript)
+    
+    # Show letters on the screen
     def display_characters(self, node, *chara_tuples):
+        self.remove_letters()
         '''
         (num_of_characters, vam_size)
         <!> Random positioning of these characters, no overlap
@@ -332,18 +433,17 @@ class EyeAcuityTest(FlowchartSystem):
             
             # <!> Call run_javascript method of eye_acuity_wrapper
             self.eye_acuity_wrapper.run_javascript(javascript)
-        
-    def check_characters(self, node):
+    
+    # Calculate score
+    def calculate_score(self, node):
         # <!> Order currently not maintained
         context = node.context
-        print("Context is ", context)
         
         # Reset score
         context["characters_score"] = {}
         
         user_input = context["process_text"]
         #o_user_input = user_input
-        user_input = user_input.lower()
         user_input = user_input.replace("-"," ")
         
         # Bandaid for issue: "Letters stuck together may be considered as word, hence ipa conversion fails"
@@ -351,10 +451,13 @@ class EyeAcuityTest(FlowchartSystem):
         # Calculate total length of characters
         for vam_size, characters in context["characters_displayed"].items():
             total_char_length+=len(characters)
-        if len(user_input) <= total_char_length:
+        if len(''.join(e for e in user_input if e.isalnum())) <= total_char_length:
+            print("User input is shorter:", user_input, len(user_input))
             user_input = list(user_input)
         else:
+            print("User input is not shorter:", user_input, len(user_input))
             user_input = user_input.split(" ")
+    
         ipa_user_input = []
         for i in user_input:
             ipa_user_input.append(p.convert(i))
@@ -372,13 +475,33 @@ class EyeAcuityTest(FlowchartSystem):
                         ipa_user_input.remove(ipa)
                         break
         
+        print("Context is ", context)
         for vam_size, score in context["characters_score"].items():
             if len(context["characters_displayed"][vam_size]) > score:
                 print("<Check characters> False")
                 return False
         return True
         
-    
+    def display_text(self, text):
+        self.remove_letters()
+        javascript = f"""
+            // Get the <p> element under the "letters" class
+            var lettersParagraph = document.querySelector(".letters");
+
+            var para = document.createElement('p');
+            // Define the text you want to set
+            var newText = "{text}";
+
+            // Set the text content of the <p> element
+            para.textContent = newText;
+            
+            para.style.fontSize = "0.3cm";
+            lettersParagraph.appendChild(para);
+            """
+            
+            # <!> Call run_javascript method of eye_acuity_wrapper
+        self.eye_acuity_wrapper.run_javascript(javascript)
+        
     def please_try_again(self, **kwargs):
         node: FlowChartDecisionNode = kwargs["flowerchart_node"]
         self.eye_acuity_wrapper.play_audio("/tts_recordings/please_try_again.mp3")
@@ -402,8 +525,7 @@ class EyeAcuityTest(FlowchartSystem):
         return False
         '''
 
-    def play_audio(self, **kwargs):
-        audio_file_path = kwargs["audio_file_path"]
+    def play_audio(self, audio_file_path):
         self.eye_acuity_wrapper.play_audio(audio_file_path)
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-from flowchart_node import *
+from .flowchart_node import *
 
 class FlowchartSystem:
     def __init__(self, nodes = [], start_node = None):
@@ -17,6 +17,7 @@ class FlowchartSystem:
             
 
 if __name__ == '__main__':
+    from flowchart_node import *
     #foo.bark = new_bark.__get__(foo, Dog)
     def test_print(parameter):
         print(parameter)

@@ -118,17 +118,7 @@ class MainWindow(QMainWindow):
     @Slot()
     def _readyRead(self):
         data = self._io_device.readAll()
-        '''
-        self.audio_socket_try_lock = self.audio_socket_mutex.try_lock() # Mutex lock self.audio_socket_running
-        # Make a copy, if you cant get the lock, stop
-        if self.audio_socket_try_lock:
-            print(TRY LOCK)
-            self.audio_socket_running_copy = self.audio_socket_running
-            self.audio_socket_mutex.unlock() #Mutex unlock
-        else:
-            print("TRY LOCK FAILED")
-            return
-        '''
+        
         self.audio_socket_mutex.lock()
         self.audio_socket_running_copy = self.audio_socket_running
         self.audio_socket_mutex.unlock()

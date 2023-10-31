@@ -57,7 +57,7 @@ class HTMLWindow(QMainWindow, EyeAcuityWrapper):
         self.load_html_content()
         
         
-        self.eyeacuitytest.execute_process()
+        self.eyeacuitytest.run()
     
         #self.interact_with_page()
 
@@ -83,16 +83,13 @@ class HTMLWindow(QMainWindow, EyeAcuityWrapper):
     def processText(self, text):
         print(self.eyeacuitytest.current_node)
         if self.enable_process_input:
-            # <!> If audio is playing, ignore
-            if isinstance(self.eyeacuitytest.current_node, FlowChartDecisionNode):
-                self.eyeacuitytest.execute_decision(text)
+            self.eyeacuitytest.signal("process_text", text)
     
     @Slot()
     def toggle_processing(self):
         self.enable_process_input = not self.enable_process_input
         if (self.enable_process_input):
-            if isinstance(self.eyeacuitytest.current_node, FlowChartDelayNode):
-                self.eyeacuitytest.execute_delay()
+            self.eyeacuitytest.signal("audio_done")
             
     def play_audio(self, relative_audio_location):
         
