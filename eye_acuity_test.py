@@ -38,7 +38,7 @@ class EyeAcuityTest(FlowchartSystem):
         }
         
         self.generable_characters = ['C', 'D', 'E', 'F', 'L', 'O', 'P', 'T', 'Z']
-        self.generable_characters_ipa = ["si", "di", 'i', 'ɛf', 'ɛl', 'oʊ', 'pi', 'ti', 'zi']
+        #self.generable_characters_ipa = ["si", "di", 'i', 'ɛf', 'ɛl', 'oʊ', 'pi', 'ti', 'zi']
 
         self.character_ipa_map = {
             "C": ["si"], "D": ["di"], "E": ['i'], 
@@ -128,7 +128,7 @@ class EyeAcuityTest(FlowchartSystem):
             if not node.context["second_eye"]:
                 self.play_audio("/tts_recordings/stand_4_meters_away.mp3")
             else:
-                self.play_audio()
+                self.play_audio("/tts_recordings/please_cover_other_eye.mp3")
         
         def generic_error(this: DecisionNode):
             self.play_audio("/tts_recordings/please_try_again.mp3")
@@ -165,18 +165,22 @@ class EyeAcuityTest(FlowchartSystem):
         def compute_va_score_process(node: ProcessNode):
             context = node.context
             vam_sizes = context["characters_displayed"].keys()
+            
             failed_vam_size = ""
             for vam_size in vam_sizes:
                 if not able_to_read_all(node, vam_size):
                     failed_vam_size = vam_size
                     break
+            if failed_vam_size == "": failed_vam_size = vam_size
             score = context["characters_score"][failed_vam_size]
             max_score = len(context["characters_displayed"][failed_vam_size])
+            
             if context["second_eye"]:
                 context["va_score"]["right"] = vam_size + ": " + str(score) + " / " + str(max_score)
             else:
                 #!!! Testing purposes
                 context["second_eye"] = 1
+                context["pinhole"] = 0
                 context["va_score"] = {"left": vam_size + ": " + str(score) + " / " + str(max_score)}
                 
             print(" Computer VA Score ")
@@ -186,7 +190,7 @@ class EyeAcuityTest(FlowchartSystem):
             context = node.context
             print("<PRINT REPORT> ", context["va_score"])
             report_text = "(Left eye) " + context["va_score"]["left"]
-            if "right" in context["va_score"]: report_text += "| (Right eye) " + context["va_score"]["right"]
+            if "right" in context["va_score"]: report_text += " | (Right eye) " + context["va_score"]["right"]
             self.display_text(report_text)
             
             # Clear report after printing
@@ -405,7 +409,7 @@ class EyeAcuityTest(FlowchartSystem):
             
             # Loop at 6/60 and 6/45 for demo purposes
             nodes["validate_6/45"].true_node = nodes["display"]
-            precise_nodes["validate_6/60"].true_node = precise_nodes["validate_6/60"].false_node #precise_nodes["display"]
+            precise_nodes["validate_6/60"].true_node = precise_nodes["display"]
         
     '''
     Methods used for acuity test display
@@ -487,6 +491,7 @@ class EyeAcuityTest(FlowchartSystem):
         if len(''.join(e for e in user_input if e.isalnum())) <= total_char_length:
             print("User input is shorter:", user_input, len(user_input))
             user_input = list(user_input)
+            print(user_input)
         else:
             print("User input is not shorter:", user_input, len(user_input))
             user_input = user_input.split(" ")
@@ -496,6 +501,7 @@ class EyeAcuityTest(FlowchartSystem):
             if p.convert(i) in self.ipa_letters:
                 ipa_user_input.append(p.convert(i))
         
+        print("IPA of user input is: ", ipa_user_input)
         # Determine if any letters is spoken at all
         if (len(ipa_user_input) == 0): 
             context["letters_spoken"] = False
