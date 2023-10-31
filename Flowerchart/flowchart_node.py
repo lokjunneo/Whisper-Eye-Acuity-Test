@@ -63,7 +63,7 @@ class DecisionNode(CallableNode):
         self.false_node = false_node
     
     def _callback(self):
-        if self.callback() is True:
+        if self.callback() == True:
             self.next_node = self.true_node
         else:
             self.next_node = self.false_node
@@ -75,8 +75,8 @@ class SignalNode(FlowchartNode):
         self.signal_key = None
     def _process_signal(self, signal_key, *signal_data):
         if self.signal_key == signal_key:
-            if len(signal_data) > 0:
-                self.context[signal_key] = signal_data
+            if len(signal_data) == 1:
+                self.context[signal_key] = signal_data[0]
             return self._to_next_node()
         
         # Current node is self again, so system will wait for signal
