@@ -45,6 +45,13 @@ class EyeAcuityTest(FlowchartSystem):
             "F": ['ɛf'],"L": ['ɛl'],"O": ['oʊ'],
             "P": ['pi'],"T": ['ti'],"Z": ['zi', 'zæk', 'zek*','zɛk','zeee']
         }
+        
+        # Store all ipa of all letters
+        from string import ascii_lowercase
+        self.ipa_letters = []
+        for i in ascii_lowercase: self.ipa_letters.append(p.convert(i))
+        self.ipa_letters += ['zæk', 'zek*','zɛk','zeee'] # All alternate pronounciation of z
+        print("List of ipa_letters initialised with values: ", self.ipa_letters)
         # <!> Need to map generable_characters to ipa
         
         self.eye_acuity_wrapper = eye_acuity_wrapper
@@ -55,6 +62,7 @@ class EyeAcuityTest(FlowchartSystem):
         Test
         node.context["characters_displayed"] = {"6/120" : ["a", "b"]}
         node.context["characters_score"] = {"6/120": 1}
+        node.context["letters_spoken"] = False
         
         Progress
         node.context["both_eyes"] = 0
@@ -144,6 +152,9 @@ class EyeAcuityTest(FlowchartSystem):
                 return False
             print("Able to read 50% of ", vam_size)
             return True
+        
+        def any_letters_spoken_decision(node: DecisionNode):
+            return node.context["letters_spoken"]
 
         def compute_va_score_process(node: ProcessNode):
             context = node.context
@@ -173,12 +184,22 @@ class EyeAcuityTest(FlowchartSystem):
         Node generating functions
         '''        
         # Add wait and check blocks behind given node
-        def add_wait_check(node) -> IONode: 
+        def add_wait_check(node) -> DecisionNode: 
+            '''
+            Return:
+            
+            DecisionNode: Use returnedNode.true_node to continue programme flow
+            '''
             wait_input = copy.copy(self.nodes["wait_input"])
             check_score = copy.copy(self.nodes["check_score"])
+            any_letters_spoken = DecisionNode()
+            any_letters_spoken.callback = partial(any_letters_spoken_decision, any_letters_spoken)
+            any_letters_spoken.false_node = wait_input
             node.next_node = wait_input
             wait_input.next_node = check_score
-            return check_score
+            check_score.next_node = any_letters_spoken
+
+            return any_letters_spoken
         
         def generate_one_per_size(*vam):
             '''
@@ -202,19 +223,15 @@ class EyeAcuityTest(FlowchartSystem):
             return_dict = {
                 "display": display_node,
                 "wait": display_node.next_node,
-                "calculate": display_node.next_node.next_node
+                "calculate": display_node.next_node.next_node,
+                "any_letters_spoken": display_node.next_node.next_node.next_node
             }
             # Generate validate nodes, per item in vam
             # node => display_node => wait_input => check_score => validate_6/120 => validate_6/60...
-            curr_node_is_validate_node = False
             for i in vam:
                 validate_node = copy.copy(self.nodes["able_to_read_all"])
                 validate_node.callback = partial(able_to_read_all, validate_node, i)
-                if not curr_node_is_validate_node:
-                    curr_node.next_node = validate_node
-                    curr_node_is_validate_node = 1
-                else:
-                    curr_node.true_node = validate_node
+                curr_node.true_node = validate_node
                 
                 curr_node = validate_node
                 return_dict["validate_"+i] = validate_node
@@ -222,9 +239,10 @@ class EyeAcuityTest(FlowchartSystem):
             {
                 "display": display_node,
                 "wait": display_node.next_node,
-                "calculate": display_node.next_node.next_node
-                "validate_6/120": display_node.next_node.next_node.next_node
-                "validate_6/60": display_node.next_node.next_node.next_node.next_node
+                "calculate": display_node.next_node.next_node,
+                "any_letters_spoken": display_node.next_node.next_node.next_node,
+                "validate_6/120": display_node.next_node.next_node.next_node.next_node,
+                "validate_6/60": display_node.next_node.next_node.next_node.next_node.next_node
                 ...
             }
             '''
@@ -261,15 +279,15 @@ class EyeAcuityTest(FlowchartSystem):
             display_node = ProcessNode() #copy.copy(self.nodes["display_node"])
             display_node.callback = partial(self.display_characters, display_node, (num_of_char, vam_size))
             
-            # curr_node is now the "latest" node, at "check_score"
-            # node => display_node => wait_input => check_score
+            # curr_node is now the "latest" node, at "any_letters_spoken"
+            # node => display_node => wait_input => check_score => any_letters_spoken
             curr_node = add_wait_check(display_node)
             
             # Generate validate node (able to read >50%?)
             score_validate = copy.copy(self.nodes["able_to_read_50"])
             score_validate.callback = partial(able_to_read_50, score_validate, vam_size)
             
-            curr_node.next_node = score_validate
+            curr_node.true_node = score_validate
             curr_node = score_validate
             
             is_using_pinhole_node: DecisionNode = DecisionNode()
@@ -282,7 +300,8 @@ class EyeAcuityTest(FlowchartSystem):
                 "display": display_node,
                 "wait": display_node.next_node,
                 "calculate": display_node.next_node.next_node,
-                "validate_" + vam_size: display_node.next_node.next_node.next_node,
+                "any_letters_spoken": display_node.next_node.next_node.next_node,
+                "validate_" + vam_size: score_validate,
                 "is_using_pinhole_node": is_using_pinhole_node
             }
             return return_dict
@@ -443,7 +462,7 @@ class EyeAcuityTest(FlowchartSystem):
         context["characters_score"] = {}
         
         user_input = context["process_text"]
-        #o_user_input = user_input
+        
         user_input = user_input.replace("-"," ")
         
         # Bandaid for issue: "Letters stuck together may be considered as word, hence ipa conversion fails"
@@ -460,8 +479,16 @@ class EyeAcuityTest(FlowchartSystem):
     
         ipa_user_input = []
         for i in user_input:
-            ipa_user_input.append(p.convert(i))
-        #om_user_input = user_input
+            if p.convert(i) in self.ipa_letters:
+                ipa_user_input.append(p.convert(i))
+        
+        # Determine if any letters is spoken at all
+        if (len(ipa_user_input) == 0): 
+            context["letters_spoken"] = False
+            return False
+        else:
+            context["letters_spoken"] = True
+            
         # Tabulate score for each characters
         for vam_size,characters in context["characters_displayed"].items():
             context["characters_score"][vam_size] = 0
