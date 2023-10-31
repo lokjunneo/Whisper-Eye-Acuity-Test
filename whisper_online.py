@@ -140,8 +140,18 @@ class FasterWhisperASR(ASRBase):
             print(f"<<< Segment {seg_count}: ")#, seg)
             
             print("Transcribed text: ", seg.text)
+            old_init = 0
+            old_start = 0.0
+            old_end = 0.0
             for word in seg.words:
+                if word.start == word.end:
+                    # Buggy transcription
+                    print("<NOT SO FAST>")
+                    print(seg.words)
+                    return (list(), info)
                 print(f"At {word.start:2.2f} to {word.end:2.2f}: {word.word}")
+                old_start = word.start
+                old_end = word.end
             seg_count += 1
             
         #print("List segments is: ", list(segments))
@@ -324,6 +334,7 @@ class OnlineASRProcessor:
         if (len(tsw) > 0):
             # If end of latest speech segment is more than 2 seconds
             # (2 seconds of silence)
+            '''
             if (len(tsw) > 1):
                 
                 # end time of second last word
@@ -337,6 +348,8 @@ class OnlineASRProcessor:
                     transcription += word[2] + " "
                 print("<transcribed>", transcription, "</transcribed>")
                 return transcription
+            '''
+            # If 1 second of silence is detected
             if (current_audio_length - tsw[-1][1] > 1 ):
                 print("<1 second of silence>")
                 second_last_end = (tsw[-1][1] * self.SAMPLING_RATE)
@@ -349,14 +362,14 @@ class OnlineASRProcessor:
                 return transcription
 
         # there is a newly confirmed text
-        '''
-        if o:
-            # we trim all the completed sentences from the audio buffer
-            self.chunk_completed_sentence()
-        '''
 
-        # if the audio buffer is longer than 30s, trim it...
-        if len(self.audio_buffer)/self.SAMPLING_RATE > 10:
+        # if the audio buffer is longer than 30s, trim it... 
+        elif len(self.audio_buffer)/self.SAMPLING_RATE > 15:        
+            '''
+            if o:
+                # we trim all the completed sentences from the audio buffer
+                self.chunk_completed_sentence()
+            '''
             # ...on the last completed segment (labeled by Whisper)
             #self.chunk_completed_segment(res)
             self.audio_buffer = np.array([],dtype=np.float32)
