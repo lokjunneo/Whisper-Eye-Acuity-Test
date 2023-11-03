@@ -7,8 +7,6 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 
 from eye_acuity_test import EyeAcuityTest, EyeAcuityWrapper
 
-from Flowerchart.flowerchart_node import FlowChartDecisionNode, FlowChartProcessNode, FlowChartNode, FlowChartDelayNode, print_kwargs
-
 # For testing purposes
 from threading import Thread
 import time
