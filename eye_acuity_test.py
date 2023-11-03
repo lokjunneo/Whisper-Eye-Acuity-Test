@@ -304,6 +304,7 @@ class EyeAcuityTest(FlowchartSystem):
             # Generate validate node (able to read >50%?)
             score_validate = copy.copy(self.nodes["able_to_read_50"])
             score_validate.callback = partial(able_to_read_50, score_validate, vam_size)
+            score_validate.callback = partial(able_to_read_all, score_validate, vam_size)
             
             curr_node.true_node = score_validate
             curr_node = score_validate
