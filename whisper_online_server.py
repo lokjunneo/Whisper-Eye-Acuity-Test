@@ -7,7 +7,8 @@ import os
 parser = argparse.ArgumentParser()
 
 # server options
-parser.add_argument("--host", type=str, default='192.168.137.1')
+#parser.add_argument("--host", type=str, default='192.168.137.1')
+parser.add_argument("--host", type=str, default='localhost')
 parser.add_argument("--port", type=int, default=43007)
 
 

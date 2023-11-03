@@ -12,8 +12,8 @@ from socket_receiver import SocketReceiver
 
 from html_viewer import HTMLWindow
 
-#SERVER_HOST = '127.0.0.1'
-SERVER_HOST = '192.168.137.1'
+SERVER_HOST = '127.0.0.1'
+#SERVER_HOST = '192.168.137.1'
 SERVER_PORT = 43007
 
 SAMPLE_COUNT = 2048
