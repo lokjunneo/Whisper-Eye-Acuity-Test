@@ -2,7 +2,7 @@
 This project uses a modified copy of [whisper streaming](https://github.com/ufal/whisper_streaming) for the server, 
 and pyside6 for the client. The `socket` python library is used for communication between server and client.
 
-# Main takaways
+# Main takeaways
 - The application uses eng-to-ipa to convert transribed text to IPA characters.
 It also checks against a list of IPA characters to find out what letter was spoken.
 
@@ -15,6 +15,7 @@ self.character_ipa_map = {
     "P": ['pi'],"T": ['ti'],"Z": ['zi', 'zæk', 'zek*','zɛk','zeee']
 }
 ```
+More IPA characters may be added. For example
 
 This was meant to deal with the scenarios when Whisper determines the user input as words instead of letters. However, it appears that Whisper may automatically "complete" the user's input by adding in additonal words behind, which in this case, the ipa conversion would not be able to solve.
 
