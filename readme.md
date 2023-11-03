@@ -26,9 +26,15 @@ Additonally, more IPA characters may be added. For example, Whisper may detect a
 
 # Summary of implementation
 
+## Server
 The server uses the Faster-Whisper model, which uses a built-in `Silero-VAD` to filter out empty audio segments and timestamping technology, to provide a "live" transcription of what the user said. This is done by storing the audio input from the client into a buffer, and transcribing the audio in the buffer whenever there is a new audio input. 
 
 After 1 seconds of silence is detected, based off the timestamps, the server will clear the transcribed audio segments from its audio buffer and return the transcribed audio segments to the client. This helps ensure that the buffer will not be full.
+
+## Client
+The client uses the Qt framework to display UI, and to take audio input from the user. Whenever new audio input is received, the client will send the data to the server. Hence this setup is reliant on `Faster-Whisper`'s built-in VAD (although the client has a VAD implemented, but not used at all).
+
+The client has a custom-made [library called Flowerchart](https://github.com/lokjunneo/Whisper-Eye-Acuity-Test/tree/main/Flowerchart) to allow implementation based off the `FlowChart`. Basically, it allows the user to create `nodes` such as `DecisionNode` or `ProcessNode`, and link the nodes together to create the application flow based off a flowchart.
 
 # Installation
 
