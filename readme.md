@@ -15,11 +15,12 @@ self.character_ipa_map = {
     "P": ['pi'],"T": ['ti'],"Z": ['zi', 'zæk', 'zek*','zɛk','zeee']
 }
 ```
-More IPA characters may be added. For example
 
 This was meant to deal with the scenarios when Whisper determines the user input as words instead of letters. However, it appears that Whisper may automatically "complete" the user's input by adding in additonal words behind, which in this case, the ipa conversion would not be able to solve.
 
 Example: If the user says "C", Whisper may produce the result "see", or "see you".
+
+Additonally, more IPA characters may be added. For example, Whisper may detect a spoken `L` as `Al`, in which case, adding in `"L": ['æl','ɛl']` would resolve the issue.
 
 - During the eye acuity test, the application ignores the user input if no letters were detected (nothing from user input is in the list of IPA characters).
 
